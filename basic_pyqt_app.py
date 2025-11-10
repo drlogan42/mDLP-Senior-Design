@@ -1,31 +1,33 @@
-# mvp_pyqt_gui.py
-# Updated with styling, colors, and layout centering from the earlier aesthetic script.
+# Preliminary GUI w/ Python Fontend and Julia Backend
+# Logan Shaffer
 
-import sys
-import subprocess # Module to run external programs
-import os         # Used to check if the Julia script exists
-from PyQt6.QtCore import Qt # NEW: Added for alignment flags
-
-# --- Configuration ---
-JULIA_SCRIPT_PATH = "hello_julia.jl"
-
-# 1. The essential modules needed for the core structure
-from PyQt6.QtWidgets import (
-    QApplication,  # The core application object (the "engine")
-    QMainWindow,   # The main top-level window (the "frame")
+# =-=-=-=-= Imports =-=-=-=-=
+import sys        # Handles system tasks like exiting program
+import subprocess # Allows Python to start Julia and other executables
+import os         # Check if Julia exists before running
+from PyQt6.QtCore import Qt # Alignment
+from PyQt6.QtWidgets import ( # Only import necessary for readability and performance
+    QApplication,  # Manages the event loop (update loop)
+    QMainWindow,   # Main window to hold everything (the frame)
     QVBoxLayout,   # Vertical layout manager
+    QHBoxLayout,   # Horizontal layout manager
     QWidget,       # Generic container widget
     QPushButton,   # Interactive component (the button)
     QLabel,        # Display component (the text)
-    QMessageBox,   # For showing error messages instead of print
-    QHBoxLayout,   # NEW: Added for button centering
+    QMessageBox,   # For showing messages instead of print
 )
 
+# =-=-=-= Configuration =-=-=-=
+JULIA_SCRIPT_PATH = "hello_julia.jl"    # Set the path of Julia
+
+# =-=-= Main Window =-=-=
 class MVPWindow(QMainWindow):
     """
-    The main window class. This is where you define the UI structure and behavior.
+    The main window class. Structure and behavior of the UI elements is here
+    MVPWindow inherits from QMainWindow
     """
-    def __init__(self):
+    # =-=-= Start =-=-=
+    def __init__(self): #
         # Always call the parent constructor
         super().__init__()
         
@@ -130,7 +132,7 @@ class MVPWindow(QMainWindow):
             self.action_button.setText("Run Julia 'Hello World'")
 
         
-# --- Application Entry Point (The Boilerplate) ---
+# =- Awake -=
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MVPWindow()
