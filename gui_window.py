@@ -4,62 +4,75 @@
 # Imports
 import sys
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import (
-    QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, 
-    QPushButton, QLabel, QMessageBox
-)
+from PyQt6.QtWidgets import (QMainWindow, QVBoxLayout, QWidget, QPushButton, QLabel, QHBoxLayout, QMessageBox)
 
 
-# MVPWindow creates the window, frame, title, and initializes all elements (static and interactive) 
-class MVPWindow(QMainWindow):
+# ScientificGUI creates the window, frame, title, and initializes all elements (static and interactive) 
+class ScientificGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         
         # Program Name
-        self.setWindowTitle("MVP PyQt Modular - Julia Caller")  # Text
-        self.setGeometry(100, 100, 600, 250)    # Position
-        
-        # Widgets initialization and Styling
-        
-        # Title text
-        self.title_label = QLabel("Julia Backend / Python Frontend (Modular)")      # Text
-        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)     # Alignment
-        self.title_label.setStyleSheet("font-size: 26px; font-weight: bold; margin-bottom: 15px; color: #333;")     # Style
-        
-        # Status
-        self.status_label = QLabel(f"Initial Status: Ready. Press button to run Julia.")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_label.setStyleSheet("font-style: italic; color: #444; font-size: 14px;")
-
-        # Button 
-        self.action_button = QPushButton("Run Julia 'Hello World'")
-        self.action_button.setStyleSheet("padding: 12px 20px; background-color: #4A90E2; color: white; border-radius: 8px; font-size: 16px;")
-        
-        # Layout and Container Setup
-        central_widget = QWidget()      # Main widget to act as a container
-        main_layout = QVBoxLayout(central_widget)   # stack title, status, and button
-        
-        main_layout.addWidget(self.title_label)
-        main_layout.addWidget(self.status_label)
-        
-        button_layout = QHBoxLayout()
-        button_layout.addStretch(1)
-        button_layout.addWidget(self.action_button)
-        button_layout.addStretch(1)
-        
-        main_layout.addLayout(button_layout)
-        self.setCentralWidget(central_widget)
-
-    # Status Update Method
-    def update_status_text(self, message, style):
-        self.status_label.setText(message)      # Change text of status
-        self.status_label.setStyleSheet(style)  # Change color of status
+        self.setWindowTitle("Async PyQt + ZMQ Controller")  # Text
+        self.setGeometry(100, 100, 700, 300)    # Position
+        self.init_ui()
     
-    # Error Update Method
-    def show_error(self, title, message):
-        QMessageBox.critical(self, title, message)      # Display pop-up error message
+    def init_ui(self):
+        # Initializes the main GUI layout and components
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
 
-    # Enable Button Method
-    def set_button_enabled(self, enabled, text):
-        self.action_button.setEnabled(enabled)      # When pressed, enable
-        self.action_button.setText(text)            # If process is busy set text
+        # Title text
+        title_label = QLabel("Julia Backend / Python Frontend {Async Experiment Control (ZMQ)}")      # Text
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setStyleSheet("font-size: 24px; font-weight: bold; margin-bottom: 10px; color: #333;")
+        main_layout.addWidget(title_label)
+
+
+        # Status
+        self.status_label = QLabel("Status: Ready to start.")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setStyleSheet("font-style: italic; color: #444; font-size: 16px;")
+        main_layout.addWidget(self.status_label)
+
+        # Control Panel 
+        control_panel = QWidget()
+        control_layout = QHBoxLayout(control_panel)
+        control_layout.setContentsMargins(0, 15, 0, 15)
+        control_layout.addStretch(1)
+
+        self.start_button = QPushButton("1. Start Experiment (Launch Julia)")
+        self.start_button.setStyleSheet("background-color: #4CAF50; color: white;") # Green
+        control_layout.addWidget(self.start_button)
+        
+        self.stop_button = QPushButton("2. Stop Experiment (Terminate Julia)")
+        self.stop_button.setStyleSheet("background-color: #F44336; color: white;") # Red
+        self.stop_button.setEnabled(False) # Start disabled
+        control_layout.addWidget(self.stop_button)
+
+        control_layout.addStretch(1)
+        main_layout.addWidget(control_panel)
+        
+        self.setStyleSheet("""
+            QPushButton { padding: 12px 20px; border-radius: 8px; font-size: 14px; }
+            QMainWindow { background-color: #fafafa; }
+        """)
+
+    # --- Controller/Model Interface Slots (Methods the Controller calls) ---
+    def update_status(self, message, color="#444", bold=False):
+        """Updates the status label with a custom message and color."""
+        style = f"font-size: 16px; color: {color};"
+        if bold:
+            style += " font-weight: bold;"
+        self.status_label.setText(message)
+        self.status_label.setStyleSheet(style)
+        
+    def set_controls_enabled(self, is_running):
+        """Enables/disables buttons based on the current state."""
+        self.start_button.setEnabled(not is_running)
+        self.stop_button.setEnabled(is_running)
+            
+    def show_error(self, title, message):
+        """Displays a critical error message."""
+        QMessageBox.critical(self, title, message)

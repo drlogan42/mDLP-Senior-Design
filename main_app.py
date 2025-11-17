@@ -6,21 +6,21 @@ import sys
 from PyQt6.QtWidgets import QApplication
 
 # Import the modular components
-from gui_window import MVPWindow
-from blocking_controller import BlockingController
+from gui_window import ScientificGUI
+from zmq_controller import ScientificController
 
 # Main
 if __name__ == "__main__":
     app = QApplication(sys.argv)     # Create QApplication object (engine to handle os integration, event loop, and PyQt environment)
     
     # Instanciate the components
-    window = MVPWindow()     # Create the view (the UI window) as defined in gui_window.py
+    window = ScientificGUI()     # Create the view (the UI window) as defined in gui_window.py
 
-    controller = BlockingController(window)     # Create the Controller (the logic handler), referencing window
+    controller = ScientificController(window)     # Create the Controller (the logic handler), referencing window
 
     # Connect Logic to UI
-    window.action_button.clicked.connect(controller.execute_julia) # signal emitted by button click to run julia process.     # The UI doesn't know what's in the controller, only that it has a method to call.
-
+    window.start_button.clicked.connect(controller.start_experiment)
+    window.stop_button.clicked.connect(controller.stop_experiment)
 
     # Execute
     window.show()   # Show window 
