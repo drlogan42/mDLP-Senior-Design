@@ -38,8 +38,7 @@ function main()
         json_data = json(data)
         
         # Send the JSON string
-        ZMQ.sendmsg(socket, [json_data])
-        # Print to Julia console (will be discarded by Popen in Python)
+        ZMQ.send(socket, json_data)        # Print to Julia console (will be discarded by Popen in Python)
         # println("Sent: $json_data") 
         
         # Wait for 100ms before sending the next data point

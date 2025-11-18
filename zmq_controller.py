@@ -113,10 +113,16 @@ class ScientificController(QObject):
             # Starts the Julia script as a separate OS process.
             # We use subprocess.DEVNULL for stdout/stderr to prevent Julia output from 
             # interfering with the main console or blocking the PyQt event loop.
+            # self.julia_process = subprocess.Popen(
+            #     ['julia', JULIA_SCRIPT_PATH],
+            #     stdout=subprocess.DEVNULL, 
+            #     stderr=subprocess.DEVNULL
+            # )
+
             self.julia_process = subprocess.Popen(
-                ['julia', JULIA_SCRIPT_PATH],
-                stdout=subprocess.DEVNULL, 
-                stderr=subprocess.DEVNULL
+                ['julia', JULIA_SCRIPT_PATH]
+                # If you only want to see errors, you can keep stdout=subprocess.DEVNULL 
+                # but removing both is safest for debugging
             )
             print(f"Julia Process started with PID: {self.julia_process.pid}")
             
