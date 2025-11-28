@@ -1,58 +1,23 @@
-# hello_julia.jl
-# This script simply prints a confirmation message.
-
 # julia_backend.jl
-# A persistent Julia script that publishes data over ZMQ.
-# Requires: Pkg.add(["ZMQ", "JSON"])
-
-using ZMQ
-using JSON
-using Random
-
-const ZMQ_ADDRESS = "tcp://127.0.0.1:5555"
+# The main Julia backend process. In a final system, this script would open
+# the serial port (e.g., /dev/ttyACM0) and read the 115200 baud stream,
+# then publish that data via ZMQ.
+# For now, it simply runs to keep the process alive as the Data Listener.
 
 function main()
-    println("Julia Backend starting. Publishing data to $ZMQ_ADDRESS...")
+    println("Julia Data Listener Backend started.")
+    println("Waiting for instrument data...")
     
-    # Create a ZMQ context and a PUSH socket
-    ctx = Context()
-    socket = Socket(ctx, PUB)
-    
-    # Bind to the address (Python will CONNECT)
-    ZMQ.bind(socket, ZMQ_ADDRESS)
-    
-    start_time = time()
-    counter = 0
-
-    # Loop forever, publishing data every 100 milliseconds
+    # A simple loop to keep the process alive indefinitely
     while true
-        counter += 1
-        
-        # Prepare structured data (simulating a sensor reading)
-        data = Dict(
-            "time" => time() - start_time,
-            "measurement" => rand(1:100),
-            "iteration" => counter
-        )
-        
-        json_data = json(data)
-        
-        # Send the JSON string
-        ZMQ.send(socket, json_data)        # Print to Julia console (will be discarded by Popen in Python)
-        # println("Sent: $json_data") 
-        
-        # Wait for 100ms before sending the next data point
-        sleep(0.1) 
+        # In a real app, this is where you would call:
+        # read_serial_port() |> process_packet() |> ZMQ.send_to_python()
+        sleep(100) # Sleep for a long time to save CPU while waiting for instrument to start
     end
-
-    # This part should never be reached in the infinite loop
-    close(socket)
-    term(ctx)
 end
 
-# Ensure cleanup happens if the user hits Ctrl+C (though Python terminates it cleanly)
 try
     main()
 catch e
-    println("Julia caught exception: $e")
+    println("\nJulia Data Listener Backend stopped.")
 end

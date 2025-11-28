@@ -1,5 +1,5 @@
 # main_app.py
-# The application entry point. Ensure separate pieces from UI, logic, and cofig occur properly without needing to know what each does
+# The application entry point.
 
 # Basic imports
 import sys
@@ -11,17 +11,13 @@ from zmq_controller import ScientificController
 
 # Main
 if __name__ == "__main__":
-    app = QApplication(sys.argv)     # Create QApplication object (engine to handle os integration, event loop, and PyQt environment)
+    app = QApplication(sys.argv)
     
-    # Instanciate the components
-    window = ScientificGUI()     # Create the view (the UI window) as defined in gui_window.py
+    # 1. Instantiate the components
+    window = ScientificGUI() 
+    controller = ScientificController(window) 
+    # Note: All button connections are now handled inside the ScientificController's __init__ method.
 
-    controller = ScientificController(window)     # Create the Controller (the logic handler), referencing window
-
-    # Connect Logic to UI
-    window.start_button.clicked.connect(controller.start_experiment)
-    window.stop_button.clicked.connect(controller.stop_experiment)
-
-    # Execute
-    window.show()   # Show window 
-    sys.exit(app.exec())    # Start event loop to listen for events
+    # 2. Execute
+    window.show()   
+    sys.exit(app.exec())

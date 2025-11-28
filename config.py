@@ -1,7 +1,10 @@
 # config.py
 # Holds global constants and configuration details.
 
-# The path to the external script to be executed.
-# NOTE: Changing from "hello_julia.jl" to "julia_backend.jl" to match the actual logic.
-JULIA_SCRIPT_PATH = "julia_backend.jl"
-ZMQ_ADDRESS = "tcp://127.0.0.1:5555" # Add ZMQ address to configuration
+# Path for the main Julia Data Listener Backend (Original Julia script)
+JULIA_BACKEND_PATH = "julia_backend.jl"
+
+# Path for the new Julia Instrument Simulator (Fake data sender)
+JULIA_SIMULATOR_PATH = "julia_instrument_simulator.jl"
+
+ZMQ_ADDRESS = "tcp://127.0.0.1:5555"
