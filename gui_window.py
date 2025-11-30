@@ -3,7 +3,7 @@
 
 import sys
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import (QMainWindow, QVBoxLayout, QWidget, QPushButton, QLabel, QHBoxLayout, QMessageBox)
+from PyQt6.QtWidgets import (QMainWindow, QVBoxLayout, QWidget, QPushButton, QLabel, QHBoxLayout, QMessageBox, QFileDialog)
 
 # Scientific Plotting Library
 try:
@@ -17,7 +17,7 @@ class ScientificGUI(QMainWindow):
         super().__init__()
         
         self.setWindowTitle("Async PyQt + ZMQ Controller")
-        self.setGeometry(100, 100, 800, 600)
+        self.setGeometry(100, 100, 1050, 600) # Increased width for 4 columns
         
         # Data References and Timers
         self.data_reference = None 
@@ -53,14 +53,26 @@ class ScientificGUI(QMainWindow):
         self.backend_status_label.setStyleSheet("font-style: italic; color: #444; font-size: 14px;")
         status_container.addWidget(self.backend_status_label)
 
-        # Status 2: Simulator/Sender Status (New)
+        # Status 2: Simulator/Sender Status 
         self.simulator_status_label = QLabel("Simulator Status: Idle.")
         self.simulator_status_label.setAlignment(Qt.AlignmentFlag.AlignRight)
         self.simulator_status_label.setStyleSheet("font-style: italic; color: #444; font-size: 14px;")
         status_container.addWidget(self.simulator_status_label)
+        
+        # Status 3: Recording Status
+        self.recording_status_label = QLabel("Recording Status: Idle.")
+        self.recording_status_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.recording_status_label.setStyleSheet("font-style: italic; color: #444; font-size: 14px;")
+        status_container.addWidget(self.recording_status_label)
+
+        # Status 4: Playback Status (NEW)
+        self.playback_status_label = QLabel("Playback Status: Idle.")
+        self.playback_status_label.setAlignment(Qt.AlignmentFlag.AlignRight)
+        self.playback_status_label.setStyleSheet("font-style: italic; color: #444; font-size: 14px;")
+        status_container.addWidget(self.playback_status_label)
+
 
         header_layout.addLayout(status_container)
-        
         main_layout.addLayout(header_layout)
 
         # --- 2. Real-Time Graphs (PyQtGraph, Light Mode) ---
@@ -102,7 +114,7 @@ class ScientificGUI(QMainWindow):
         
         button_width = 200 # Standard width for all buttons
 
-        # Column 1: Backend Listener Control (Key change: use self.start_backend_button)
+        # Column 1: Backend Listener Control 
         buttons_layout_1 = QVBoxLayout()
         buttons_layout_1.setSpacing(10)
 
@@ -121,8 +133,6 @@ class ScientificGUI(QMainWindow):
 
         control_layout_outer.addLayout(buttons_layout_1)
         
-        # NOTE: Button connections are now handled in zmq_controller.py
-
 
         # Column 2: Simulator Control 
         buttons_layout_2 = QVBoxLayout()
@@ -143,21 +153,48 @@ class ScientificGUI(QMainWindow):
         control_layout_outer.addLayout(buttons_layout_2)
 
 
-        # Column 3: Placeholder Buttons
+        # Column 3: Recording Feature 
         buttons_layout_3 = QVBoxLayout()
         buttons_layout_3.setSpacing(10)
 
-        self.button_3 = QPushButton("3. Button (Green)")
-        self.button_3.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
-        self.button_3.setFixedWidth(button_width) 
-        buttons_layout_3.addWidget(self.button_3)
+        self.start_recording_button = QPushButton("3. START Recording")
+        self.start_recording_button.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        self.start_recording_button.setFixedWidth(button_width) 
+        self.start_recording_button.setEnabled(False) 
+        buttons_layout_3.addWidget(self.start_recording_button)
         
-        self.button_4 = QPushButton("3. Button (Red)")
-        self.button_4.setStyleSheet("background-color: #F44336; color: white; font-weight: bold;")
-        self.button_4.setFixedWidth(button_width)
-        buttons_layout_3.addWidget(self.button_4)
+        self.stop_recording_button = QPushButton("3. STOP Recording (Save File)")
+        self.stop_recording_button.setStyleSheet("background-color: #F44336; color: white; font-weight: bold;")
+        self.stop_recording_button.setFixedWidth(button_width)
+        self.stop_recording_button.setEnabled(False) 
+        buttons_layout_3.addWidget(self.stop_recording_button)
 
         control_layout_outer.addLayout(buttons_layout_3)
+
+
+        # Column 4: Trial Playback Feature (NEW COLUMN)
+        buttons_layout_4 = QVBoxLayout()
+        buttons_layout_4.setSpacing(10)
+
+        self.select_file_button = QPushButton("4. Select Recording File")
+        self.select_file_button.setStyleSheet("background-color: #007bff; color: white; font-weight: bold;")
+        self.select_file_button.setFixedWidth(button_width) 
+        self.select_file_button.setEnabled(False)
+        buttons_layout_4.addWidget(self.select_file_button)
+        
+        self.start_playback_button = QPushButton("4. START Playback")
+        self.start_playback_button.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        self.start_playback_button.setFixedWidth(button_width) 
+        self.start_playback_button.setEnabled(False)
+        buttons_layout_4.addWidget(self.start_playback_button)
+        
+        self.stop_playback_button = QPushButton("4. STOP Playback")
+        self.stop_playback_button.setStyleSheet("background-color: #F44336; color: white; font-weight: bold;")
+        self.stop_playback_button.setFixedWidth(button_width)
+        self.stop_playback_button.setEnabled(False)
+        buttons_layout_4.addWidget(self.stop_playback_button)
+
+        control_layout_outer.addLayout(buttons_layout_4)
         
         
         control_layout_outer.addStretch(1)
@@ -215,13 +252,27 @@ class ScientificGUI(QMainWindow):
             style += " font-weight: bold;"
         self.simulator_status_label.setText(f"Simulator Status: {message}")
         self.simulator_status_label.setStyleSheet(style)
+
+    def update_recording_status(self, message, color="#444", bold=False):
+        style = f"font-size: 14px; color: {color};"
+        if bold:
+            style += " font-weight: bold;"
+        self.recording_status_label.setText(f"Recording Status: {message}")
+        self.recording_status_label.setStyleSheet(style)
+        
+    # NEW: Status update for Playback
+    def update_playback_status(self, message, color="#444", bold=False):
+        style = f"font-size: 14px; color: {color};"
+        if bold:
+            style += " font-weight: bold;"
+        self.playback_status_label.setText(f"Playback Status: {message}")
+        self.playback_status_label.setStyleSheet(style)
         
     def set_backend_controls_enabled(self, is_running):
         self.start_backend_button.setEnabled(not is_running)
         self.stop_backend_button.setEnabled(is_running)
         
     def set_simulator_controls_enabled(self, is_running):
-        # Simulator controls are only enabled if the backend (Python ZMQ receiver) is running
         backend_running = self.stop_backend_button.isEnabled() 
         
         if backend_running:
@@ -230,6 +281,36 @@ class ScientificGUI(QMainWindow):
         else:
             self.start_simulator_button.setEnabled(False)
             self.stop_simulator_button.setEnabled(False)
+
+    def set_recording_controls_enabled(self, is_running):
+        backend_running = self.stop_backend_button.isEnabled() 
+        
+        if backend_running:
+            self.start_recording_button.setEnabled(not is_running)
+            self.stop_recording_button.setEnabled(is_running)
+        else:
+            self.start_recording_button.setEnabled(False)
+            self.stop_recording_button.setEnabled(False)
+            
+    # NEW: Controls for Playback buttons
+    def set_playback_controls_enabled(self, file_selected=False, is_playing=False, backend_running=False):
+        
+        if not backend_running:
+            self.select_file_button.setEnabled(False)
+            self.start_playback_button.setEnabled(False)
+            self.stop_playback_button.setEnabled(False)
+            self.update_playback_status("Backend needed for Playback.", "orange")
+            return
+            
+        # If the backend is running, enable Select File
+        self.select_file_button.setEnabled(not is_playing)
+        
+        # If a file is selected AND nothing else is running, allow starting playback
+        can_start = file_selected and not is_playing
+        self.start_playback_button.setEnabled(can_start)
+        
+        # Allow stopping if playback is active
+        self.stop_playback_button.setEnabled(is_playing)
             
     def show_error(self, title, message):
         QMessageBox.critical(self, title, message)
