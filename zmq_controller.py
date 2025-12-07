@@ -1,57 +1,71 @@
 # zmq_controller.py
+# Mediator between Gui and all services
+
 import json
 import os
 from PyQt6.QtCore import QThread, QObject, pyqtSignal
 from PyQt6.QtWidgets import QApplication, QFileDialog
 
-# --- Import New Modules ---
+#  Import Dependancies
 from process_manager import ProcessManager
 from data_recorder import DataRecorder
 from zmq_listener import ZmqListenerWorker
 from trial_player import TrialPlayerWorker
 from config import ZMQ_ADDRESS
 
+# Initializes all components, connects UI signals to methods, and manages threading for async operations
 class ScientificController(QObject):
     
     def __init__(self, window):
         super().__init__()
+        # DIP: Controller requires view instance to manipulate it 
         self.window = window
         
-        # --- Dependency Injection of Services ---
+        # Service Init. Controller owns and directs these service instances (delegate)
         self.process_manager = ProcessManager()
         self.recorder = DataRecorder()
         
-        # Threads/Workers
+        # Hold Qthread and Worker instances for ZMQ and Playback
         self.zmq_thread = None
         self.zmq_worker = None
         self.player_thread = None
         self.player_worker = None
         
-        # State
+        # State management
         self.selected_file_path = None
         self._playback_error_occurred = False
         
-        # Live Data Buffer (For plotting)
+        # Live Data Buffer
         self.plot_data = {"timestamps": [], "voltage": [], "current": []}
         
-        # cleanup hook
+        # ensure cleanup
         QApplication.instance().aboutToQuit.connect(self.stop_all)
         
         # Connect UI Signals
         self._connect_signals()
 
+    # Connects every button in view to appropriate method within controller
     def _connect_signals(self):
+        # Backend Control
         self.window.start_backend_button.clicked.connect(self.start_backend)
         self.window.stop_backend_button.clicked.connect(self.stop_backend)
+        
+        # Sim Contorl
         self.window.start_simulator_button.clicked.connect(self.start_simulator)
         self.window.stop_simulator_button.clicked.connect(self.stop_simulator)
+        
+        # Record Control
         self.window.start_recording_button.clicked.connect(self.start_recording)
         self.window.stop_recording_button.clicked.connect(self.stop_recording)
+        
+        # Playback Control
         self.window.select_file_button.clicked.connect(self.select_file)
         self.window.start_playback_button.clicked.connect(self.start_playback)
         self.window.stop_playback_button.clicked.connect(self.stop_playback)
 
-    # --- Backend Control ---
+    # =-= Process Management =-=
+
+    # Starts Julia listener via ProcessManager. Init and start ZMNQ worker thread. Update GUI State
     def start_backend(self):
         try:
             self.process_manager.start_backend()
@@ -99,7 +113,7 @@ class ScientificController(QObject):
     def stop_all(self):
         self.stop_backend()
 
-    # --- Simulator Control ---
+    # Starts Julia simulator process
     def start_simulator(self):
         self.stop_playback()
         try:
@@ -111,6 +125,7 @@ class ScientificController(QObject):
         except Exception as e:
             self.window.show_error("Simulator Error", str(e))
 
+    # Stops Simulator
     def stop_simulator(self):
         self.process_manager.stop_simulator()
         self.recorder.stop_and_save() # Ensure recording stops if sim stops
