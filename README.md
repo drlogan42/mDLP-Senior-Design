@@ -3,9 +3,7 @@
 This project is a Graphical User Interface (GUI) that uses Python / Julia to simulate data from an instrument, display real-time graphs, record trials, and playback saved data from a CSV file.
 
 ## Visual
-
-<img src="mdlp-gui-showcase.gif" width="300" height="auto">
-
+![Alt Text](resources/mdlp-gui-showcase.gif)
 ## Dependencies
 Python Packages:
 ```python
