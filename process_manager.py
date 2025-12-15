@@ -5,16 +5,14 @@ import os
 import signal
 from config import JULIA_BACKEND_PATH, JULIA_SIMULATOR_PATH
 
+# Manages lifecycle of external Julia processes.
 class ProcessManager:
-    """
-    Manages the lifecycle of external Julia processes.
-    """
     def __init__(self):
         self.backend_process = None
         self.simulator_process = None
 
+    # Starts the Julia Backend Listener.
     def start_backend(self):
-        """Starts the Julia Backend Listener."""
         if self._is_running(self.backend_process):
             raise ProcessLookupError("Backend is already running.")
         
@@ -24,13 +22,13 @@ class ProcessManager:
         self.backend_process = subprocess.Popen(['julia', JULIA_BACKEND_PATH])
         return True
 
+    # Stops the Julia Backend Listener.
     def stop_backend(self):
-        """Stops the Julia Backend."""
         self._terminate_process(self.backend_process)
         self.backend_process = None
 
+    #  Starts the Julia Instrument Simulator.
     def start_simulator(self):
-        """Starts the Julia Instrument Simulator."""
         if self._is_running(self.simulator_process):
             raise ProcessLookupError("Simulator is already running.")
             
@@ -40,8 +38,8 @@ class ProcessManager:
         self.simulator_process = subprocess.Popen(['julia', JULIA_SIMULATOR_PATH])
         return True
 
+    # Stops the Julia Instrument Simulator.
     def stop_simulator(self):
-        """Stops the Simulator."""
         self._terminate_process(self.simulator_process)
         self.simulator_process = None
 

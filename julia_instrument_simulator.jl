@@ -21,7 +21,7 @@ function main()
     while true
         t_current = time() - t_start
         
-        # --- GENERATE FAKE DATA ---
+        # =-= Create Simulated Data =-=
         sim_voltage = 5.0 * sin(2 * pi * 0.5 * t_current) + (rand() * 0.1)
         sim_current = (sim_voltage / 100.0) + (rand() * 0.001)
 
@@ -32,11 +32,11 @@ function main()
             "status" => "simulating"
         )
         
-        # --- TRANSMIT ---
+        # =-= Transmit the Data =-=
         json_payload = json(data_packet)
         ZMQ.send(socket, json_payload)
         
-        # Give the CPU a break
+        # Delay CPU
         sleep(sample_rate_delay)
     end
     

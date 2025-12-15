@@ -1,5 +1,5 @@
 # zmq_controller.py
-# Mediator between Gui and all services
+# Mediator between GUI and all services (ProcessManager, DataRecorder, ZMQ Listener, Trial Player)
 
 import json
 import os
@@ -13,15 +13,15 @@ from zmq_listener import ZmqListenerWorker
 from trial_player import TrialPlayerWorker
 from config import ZMQ_ADDRESS
 
-# Initializes all components, connects UI signals to methods, and manages threading for async operations
+# Init all components, connect UI signals to methods, and manage threading for async operations
 class ScientificController(QObject):
     
     def __init__(self, window):
         super().__init__()
-        # DIP: Controller requires view instance to manipulate it 
+        # Controller requires view instance to manipulate it (Dipendency Injection Pattern).
         self.window = window
         
-        # Service Init. Controller owns and directs these service instances (delegate)
+        # Controller directs all services
         self.process_manager = ProcessManager()
         self.recorder = DataRecorder()
         
@@ -35,10 +35,10 @@ class ScientificController(QObject):
         self.selected_file_path = None
         self._playback_error_occurred = False
         
-        # Live Data Buffer
+        # The Live Data Buffer
         self.plot_data = {"timestamps": [], "voltage": [], "current": []}
         
-        # ensure cleanup
+        # Ensure cleanup
         QApplication.instance().aboutToQuit.connect(self.stop_all)
         
         # Connect UI Signals
@@ -140,7 +140,7 @@ class ScientificController(QObject):
         )
         self.window.update_simulator_status("Simulator: STOPPED.", "red", True)
 
-    # --- Recording Control ---
+    # =-= Recording Control =-=
     def start_recording(self):
         if not self.window.stop_backend_button.isEnabled():
             return
@@ -167,7 +167,7 @@ class ScientificController(QObject):
         except Exception as e:
              self.window.show_error("Save Error", str(e))
 
-    # --- Playback Control ---
+    # =-= Playback Control =-=
     def select_file(self):
         filepath, _ = QFileDialog.getOpenFileName(self.window, "Select Data", "", "CSV Files (*.csv)")
         if filepath:
@@ -210,8 +210,7 @@ class ScientificController(QObject):
             self.player_worker = None
 
         if restart_julia:
-            # Check if we should restart backend (if it was running before)
-            # For simplicity, we assume if we stop playback, we want the listener back.
+            # -= Restart Backend if needed =-=
             try:
                 self.process_manager.start_backend()
                 self.window.update_backend_status("Backend Restored.", "blue", True)
@@ -222,7 +221,7 @@ class ScientificController(QObject):
         if not self._playback_error_occurred:
              self.window.update_playback_status("Playback STOPPED.", "red", True)
 
-    # --- Helpers ---
+    # Helpers to update UI state based on backend/simulator/playback status
     def _update_ui_state(self, backend_running):
         self.window.set_backend_controls_enabled(backend_running)
         self.window.set_simulator_controls_enabled(False)
@@ -241,8 +240,8 @@ class ScientificController(QObject):
         self.window.update_playback_status(msg, color, bold)
         if color == "red": self._playback_error_occurred = True
 
+    #  ZMQ Message Handler to process incoming data
     def _handle_zmq_message(self, message):
-        """Processes incoming data."""
         if "FATAL" in message:
             self.window.update_backend_status(message, "red", True)
             self.stop_all()
@@ -262,7 +261,7 @@ class ScientificController(QObject):
                     # 2. Update Recorder
                     self.recorder.add_sample(t, v, c)
 
-                    # 3. Update Status (Throttle UI updates)
+                    # 3. Update Status
                     if self.recorder.is_recording and self.recorder.get_sample_count() % 30 == 0:
                         self.window.update_recording_status(
                             f"Rec: {self.recorder.get_current_duration():.1f}s | {self.recorder.get_sample_count()} samples", "green"

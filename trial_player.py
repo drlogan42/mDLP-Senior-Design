@@ -8,10 +8,8 @@ import json
 import os
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
+# Handle file reading and ZMQ publishing in a separate thread.
 class TrialPlayerWorker(QObject):
-    """
-    Worker class to handle file reading and ZMQ publishing in a separate QThread.
-    """
     finished = pyqtSignal()
     status_update = pyqtSignal(str, str, bool) # message, color, bold
 
@@ -24,9 +22,9 @@ class TrialPlayerWorker(QObject):
         self.socket = None
         self.data_rows = []
         self.data_loaded = False
-        
+
+    # Load data from CSV file.    
     def _load_data(self):
-        """Load data from CSV into memory."""
         self.data_rows = []
         try:
             with open(self.file_path, 'r', newline='') as f:
@@ -47,14 +45,15 @@ class TrialPlayerWorker(QObject):
                     })
             self.data_loaded = True
             self.status_update.emit(f"File loaded: {len(self.data_rows)} samples.", "blue", True)
-            
+
+        # Exception    
         except Exception as e:
             self.status_update.emit(f"Playback Error: Failed to load file. {e}", "red", True)
             self._running = False
             self.data_loaded = False
 
+    # Main thread loop
     def run(self):
-        """Main loop for ZMQ Publisher thread."""
         self._load_data()
         
         if not self.data_loaded:
@@ -67,8 +66,8 @@ class TrialPlayerWorker(QObject):
             # LINGER 0 ensures the socket doesn't hang around after we close it
             self.socket.setsockopt(zmq.LINGER, 0)
             
-            # --- ROBUST BINDING STRATEGY ---
-            # Try to bind multiple times to handle OS holding the port (TIME_WAIT)
+            # =-= Bind Socket with Retries =-=
+            # Attempt to bind the socket, retrying if the port is busy.
             bound = False
             for attempt in range(5):
                 if not self._running: break
@@ -85,13 +84,13 @@ class TrialPlayerWorker(QObject):
 
             self.status_update.emit(f"Playback Started on {self.address}", "blue", True)
             
-            # Allow time for subscribers to connect
+            # Delay to allow subscribers to connect
             time.sleep(0.5) 
             
             t_start_playback = time.time()
             data_sent = 0
 
-            # --- Playback Loop ---
+            # =-= Playback Loop =-=
             for i, row in enumerate(self.data_rows):
                 if not self._running:
                     break
@@ -130,8 +129,8 @@ class TrialPlayerWorker(QObject):
             self.stop()
             self.finished.emit()
 
+    # Stop the worker thread and clean up ZMQ socket.
     def stop(self):
-        """Gracefully stop the thread and close the ZMQ socket."""
         self._running = False
         if self.socket:
             try:

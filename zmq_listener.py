@@ -2,10 +2,8 @@
 import zmq
 from PyQt6.QtCore import QObject, pyqtSignal
 
+# Dedicated worker for subscribing to ZMQ topics.
 class ZmqListenerWorker(QObject):
-    """
-    Dedicated worker for subscribing to ZMQ topics.
-    """
     message_received = pyqtSignal(str)
     
     def __init__(self, address):
@@ -15,6 +13,7 @@ class ZmqListenerWorker(QObject):
         self.context = None
         self.socket = None
 
+    # Main thread loop
     def run(self):
         try:
             self.context = zmq.Context()
@@ -38,6 +37,7 @@ class ZmqListenerWorker(QObject):
             if self.socket:
                 self.socket.close()
 
+    # Stop the worker thread and clean up ZMQ context.
     def stop(self):
         self._running = False
         if self.context:
