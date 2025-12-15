@@ -33,7 +33,7 @@ function main()
         )
         
         # =-= Transmit the Data =-=
-        json_payload = json(data_packet)
+        json_payload = JSON.json(data_packet) # Convert Dict to JSON string
         ZMQ.send(socket, json_payload)
         
         # Delay CPU
