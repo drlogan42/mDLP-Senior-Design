@@ -7,11 +7,11 @@ from PyQt6.QtCore import QThread, QObject, pyqtSignal
 from PyQt6.QtWidgets import QApplication, QFileDialog
 
 #  Import Dependancies
-from process_manager import ProcessManager
-from data_recorder import DataRecorder
-from zmq_listener import ZmqListenerWorker
-from trial_player import TrialPlayerWorker
-from config import ZMQ_ADDRESS
+from ModelScripts.process_manager import ProcessManager
+from ModelScripts.data_recorder import DataRecorder
+from ModelScripts.zmq_listener import ZmqListenerWorker
+from ModelScripts.trial_player import TrialPlayerWorker
+from ModelScripts.config import ZMQ_ADDRESS
 
 # Init all components, connect UI signals to methods, and manage threading for async operations
 class ScientificController(QObject):

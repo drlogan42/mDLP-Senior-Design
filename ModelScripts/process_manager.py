@@ -3,7 +3,7 @@
 import subprocess
 import os
 import signal
-from config import JULIA_BACKEND_PATH, JULIA_SIMULATOR_PATH
+from ModelScripts.config import JULIA_BACKEND_PATH, JULIA_SIMULATOR_PATH
 
 # Manages lifecycle of external Julia processes.
 class ProcessManager:

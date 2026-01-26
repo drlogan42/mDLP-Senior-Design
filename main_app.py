@@ -6,8 +6,8 @@ import sys
 from PyQt6.QtWidgets import QApplication
 
 # Import from Scripts
-from gui_window import ScientificGUI
-from zmq_controller import ScientificController
+from ViewScripts.gui_window import ScientificGUI
+from ControllerScripts.zmq_controller import ScientificController
 
 # Enter Main
 if __name__ == "__main__":
