@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import QApplication
 
 # Import from Scripts
 from ViewScripts.gui_window import ScientificGUI
-from ControllerScripts.zmq_controller import ScientificController
+from ControllerScripts.socket_controller import ScientificController
 
 # Enter Main
 if __name__ == "__main__":

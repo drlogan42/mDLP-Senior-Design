@@ -54,7 +54,7 @@ class DataRecorder:
         if num_samples == 0:
             return None
 
-        timestamp_str = time.strftime("%Y%m%d_%H%M%S")
+        timestamp_str = time.strftime("%Y-%m-%d_%H-%M")
         filename = f"recorded_data_{timestamp_str}.csv"
 
         try:

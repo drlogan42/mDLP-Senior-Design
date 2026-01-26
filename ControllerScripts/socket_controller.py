@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import QApplication, QFileDialog
 #  Import Dependancies
 from ModelScripts.process_manager import ProcessManager
 from ModelScripts.data_recorder import DataRecorder
-from ModelScripts.zmq_listener import ZmqListenerWorker
+from ModelScripts.socket_listener import ZmqListenerWorker
 from ModelScripts.trial_player import TrialPlayerWorker
 from ModelScripts.config import ZMQ_ADDRESS
 
