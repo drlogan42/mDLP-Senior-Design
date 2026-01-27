@@ -6,7 +6,7 @@ from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import (QMainWindow, QVBoxLayout, QWidget, QPushButton, QLabel, QHBoxLayout, QMessageBox, QFileDialog, QGridLayout)
 import pyqtgraph as pg
 
-# Main window class to build the UI and expose metjods for controller to update display
+# Main window class to build the UI and expose methods for controller to update display
 class ScientificGUI(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -24,6 +24,7 @@ class ScientificGUI(QMainWindow):
         self.init_ui()
     
     # Builds the UI structure
+    # Sets up layouts, labels, buttons, and graphs
     def init_ui(self):
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
