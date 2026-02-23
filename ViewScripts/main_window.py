@@ -1,5 +1,6 @@
-from PyQt6.QtWidgets import QMainWindow, QPushButton, QLabel, QVBoxLayout, QWidget, QGridLayout, QHBoxLayout
+from PyQt6.QtWidgets import QMainWindow, QPushButton, QLabel, QVBoxLayout, QWidget, QGridLayout, QHBoxLayout, QTextEdit
 from PyQt6.QtCore import Qt
+import pyqtgraph as pg
 
 '''
 This Script houses the UI elements of the main window. Creates layouts, buttons, labels, and panels. Does not contain any logic for button clicks or data updates. Purely the view component of the MVC architecture.
@@ -50,33 +51,33 @@ class MainWindow(QMainWindow):
 
             # Streaming and Recording buttons
         control_panel_layout.addWidget(QLabel("Mode Select"), 0, 0)
-        streaming_btn = QPushButton("Streaming")
-        streaming_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
-        control_panel_layout.addWidget(streaming_btn, 0, 1)
-        recording_btn = QPushButton("Recording")
-        recording_btn.setStyleSheet("background-color: #FF6B6B; color: white; font-weight: bold;")
-        control_panel_layout.addWidget(recording_btn, 0, 2)
+        self.streaming_btn = QPushButton("Streaming")
+        self.streaming_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
+        control_panel_layout.addWidget(self.streaming_btn, 0, 1)
+        self.playback_btn = QPushButton("Playback")
+        self.playback_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        control_panel_layout.addWidget(self.playback_btn, 0, 2)
         
             # Console Toggle
         control_panel_layout.addWidget(QLabel("Toggle Console"), 1, 0)
-        visible_btn = QPushButton("Visible")
-        visible_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
-        control_panel_layout.addWidget(visible_btn, 1, 1)
-        hidden_btn = QPushButton("Hidden")
-        hidden_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
-        control_panel_layout.addWidget(hidden_btn, 1, 2)
+        self.visible_btn = QPushButton("Visible")
+        self.visible_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
+        control_panel_layout.addWidget(self.visible_btn, 1, 1)
+        self.hidden_btn = QPushButton("Hidden")
+        self.hidden_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
+        control_panel_layout.addWidget(self.hidden_btn, 1, 2)
         
             # Clear Data
         control_panel_layout.addWidget(QLabel("Clear Data"), 2, 0)
-        clear_btn = QPushButton("Clear")
-        clear_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
-        control_panel_layout.addWidget(clear_btn, 2, 1)
+        self.clear_btn = QPushButton("Clear")
+        self.clear_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
+        control_panel_layout.addWidget(self.clear_btn, 2, 1)
         
             # Reset Program
         control_panel_layout.addWidget(QLabel("Reset Program"), 3, 0)
-        reset_btn = QPushButton("Reset")
-        reset_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
-        control_panel_layout.addWidget(reset_btn, 3, 1)
+        self.reset_btn = QPushButton("Reset")
+        self.reset_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
+        control_panel_layout.addWidget(self.reset_btn, 3, 1)
 
             # Add Control Panel to layout
         left_layout.addWidget(control_panel)
@@ -99,12 +100,13 @@ class MainWindow(QMainWindow):
         console_layout.setSpacing(5)
         
             # Text Area
-        console_text = QLabel("")
-        console_text.setStyleSheet("background-color: white; padding: 5px;")
-        console_text.setMaximumHeight(120)
+        self.console_text = QTextEdit()
+        self.console_text.setStyleSheet("background-color: white; padding: 5px;")
+        self.console_text.setMaximumHeight(120)
+        self.console_text.setReadOnly(True)  # Prevent user editing
         console_panel.setFixedWidth(300)
         console_panel.setFixedHeight(130)
-        console_layout.addWidget(console_text)
+        console_layout.addWidget(self.console_text)
         
             # Add to layout
         left_layout.addWidget(console_panel)
@@ -131,27 +133,27 @@ class MainWindow(QMainWindow):
 
             # Port info
         streaming_panel_layout.addWidget(QLabel("Port:"), 0, 0)
-        port_data = QLabel("00000")
-        port_data.setStyleSheet("background-color: white; padding: 5px;")
-        streaming_panel_layout.addWidget(port_data, 0, 1)
+        self.port_data = QLabel("00000")
+        self.port_data.setStyleSheet("background-color: white; padding: 5px;")
+        streaming_panel_layout.addWidget(self.port_data, 0, 1)
 
             # Baud Rate info
         streaming_panel_layout.addWidget(QLabel("BAUD Rate"), 1, 0)
-        baud_data = QLabel("00000")
-        baud_data.setStyleSheet("background-color: white; padding: 5px;")
-        streaming_panel_layout.addWidget(baud_data, 1, 1)
+        self.baud_data = QLabel("00000")
+        self.baud_data.setStyleSheet("background-color: white; padding: 5px;")
+        streaming_panel_layout.addWidget(self.baud_data, 1, 1)
 
             # Connection status
         streaming_panel_layout.addWidget(QLabel("Connection:"), 2, 0)
-        connection_data = QLabel("not connected")
-        connection_data.setStyleSheet("background-color: white; padding: 5px;")
-        streaming_panel_layout.addWidget(connection_data, 2, 1)
+        self.connection_data = QLabel("not connected")
+        self.connection_data.setStyleSheet("background-color: white; padding: 5px;")
+        streaming_panel_layout.addWidget(self.connection_data, 2, 1)
 
             # Receiving status
         streaming_panel_layout.addWidget(QLabel("Receiving: "), 3, 0)
-        receiving_data = QLabel("false")
-        receiving_data.setStyleSheet("background-color: white; padding: 5px;")
-        streaming_panel_layout.addWidget(receiving_data, 3, 1)
+        self.receiving_data = QLabel("false")
+        self.receiving_data.setStyleSheet("background-color: white; padding: 5px;")
+        streaming_panel_layout.addWidget(self.receiving_data, 3, 1)
 
             # add to layout
         left_layout.addWidget(streaming_panel)
@@ -176,22 +178,22 @@ class MainWindow(QMainWindow):
 
             # Playback text
         playback_panel_layout.addWidget(QLabel("Playback File:"), 0, 0)
-        playback_file_data = QLabel("None")
-        playback_file_data.setStyleSheet("background-color: white; padding: 5px;")
-        playback_panel_layout.addWidget(playback_file_data, 0, 1)
+        self.playback_file_data = QLabel("None")
+        self.playback_file_data.setStyleSheet("background-color: white; padding: 5px;")
+        playback_panel_layout.addWidget(self.playback_file_data, 0, 1)
         
             # Browse btn
-        browse_btn = QPushButton("Browse")
-        browse_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
-        playback_panel_layout.addWidget(browse_btn, 0, 2)
+        self.playback_browse_btn = QPushButton("Browse")
+        self.playback_browse_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
+        playback_panel_layout.addWidget(self.playback_browse_btn, 0, 2)
 
             # Play & Stop
-        play_btn = QPushButton("Play")
-        play_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
-        playback_panel_layout.addWidget(play_btn, 1, 1)
-        stop_btn = QPushButton("Stop")
-        stop_btn.setStyleSheet("background-color: #FF6B6B; color: white; font-weight: bold;")
-        playback_panel_layout.addWidget(stop_btn, 1, 2)
+        self.playback_play_btn = QPushButton("Play")
+        self.playback_play_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        playback_panel_layout.addWidget(self.playback_play_btn, 1, 1)
+        self.playback_stop_btn = QPushButton("Stop")
+        self.playback_stop_btn.setStyleSheet("background-color: #FF6B6B; color: white; font-weight: bold;")
+        playback_panel_layout.addWidget(self.playback_stop_btn, 1, 2)
 
             # add to layout
         left_layout.addWidget(playback_panel)
@@ -216,28 +218,28 @@ class MainWindow(QMainWindow):
 
             # Data Folder info
         recording_panel_layout.addWidget(QLabel("Data Folder:"), 0, 0)
-        data_folder_data = QLabel("None")
-        data_folder_data.setStyleSheet("background-color: white; padding: 5px;")
-        recording_panel_layout.addWidget(data_folder_data, 0, 1)
+        self.data_folder_data = QLabel("None")
+        self.data_folder_data.setStyleSheet("background-color: white; padding: 5px;")
+        recording_panel_layout.addWidget(self.data_folder_data, 0, 1)
         
             # Browse btn
-        browse_btn = QPushButton("Browse")
-        browse_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
-        recording_panel_layout.addWidget(browse_btn, 0, 2)
+        self.recording_browse_btn = QPushButton("Browse")
+        self.recording_browse_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
+        recording_panel_layout.addWidget(self.recording_browse_btn, 0, 2)
 
             # File Name info
         recording_panel_layout.addWidget(QLabel("File Name:"), 1, 0)
-        file_name_data = QLabel("None")
-        file_name_data.setStyleSheet("background-color: white; padding: 5px;")
-        recording_panel_layout.addWidget(file_name_data, 1, 1)
+        self.file_name_data = QLabel("None")
+        self.file_name_data.setStyleSheet("background-color: white; padding: 5px;")
+        recording_panel_layout.addWidget(self.file_name_data, 1, 1)
 
-            # Play & Stop buttons
-        play_btn = QPushButton("Play")
-        play_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
-        recording_panel_layout.addWidget(play_btn, 2, 1)
-        stop_btn = QPushButton("Stop")
-        stop_btn.setStyleSheet("background-color: #FF6B6B; color: white; font-weight: bold;")
-        recording_panel_layout.addWidget(stop_btn, 2, 2)
+            # Start & Stop buttons
+        self.recording_play_btn = QPushButton("Start")
+        self.recording_play_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        recording_panel_layout.addWidget(self.recording_play_btn, 2, 1)
+        self.recording_stop_btn = QPushButton("Stop")
+        self.recording_stop_btn.setStyleSheet("background-color: #FF6B6B; color: white; font-weight: bold;")
+        recording_panel_layout.addWidget(self.recording_stop_btn, 2, 2)
 
             # add to layout
         left_layout.addWidget(recording_panel)
@@ -255,22 +257,22 @@ class MainWindow(QMainWindow):
         bottom_panel.setFixedHeight(120)
 
             # Mode status
-        status1 = QLabel("Mode : Streaming")
-        status1.setStyleSheet("background-color: #FF6B6B; color: white; padding: 10px; font-weight: bold;")
-        status1.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        bottom_layout.addWidget(status1)
+        self.status1 = QLabel("Mode : Streaming")
+        self.status1.setStyleSheet("background-color: #FF6B6B; color: white; padding: 10px; font-weight: bold;")
+        self.status1.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        bottom_layout.addWidget(self.status1)
 
             # Recording status
-        status2 = QLabel("Recording: False")
-        status2.setStyleSheet("background-color: #2196F3; color: white; padding: 10px; font-weight: bold;")
-        status2.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        bottom_layout.addWidget(status2)
+        self.status2 = QLabel("Recording: False")
+        self.status2.setStyleSheet("background-color: #2196F3; color: white; padding: 10px; font-weight: bold;")
+        self.status2.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        bottom_layout.addWidget(self.status2)
 
             # Error status
-        status3 = QLabel("Status: OK")
-        status3.setStyleSheet("background-color: #4CAF50; color: white; padding: 10px; font-weight: bold;")
-        status3.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        bottom_layout.addWidget(status3)
+        self.status3 = QLabel("Status: OK")
+        self.status3.setStyleSheet("background-color: #4CAF50; color: white; padding: 10px; font-weight: bold;")
+        self.status3.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        bottom_layout.addWidget(self.status3)
 
             # add to layout
         left_layout.addWidget(bottom_panel)
@@ -284,7 +286,6 @@ class MainWindow(QMainWindow):
 
 
 
-        
         # =-= Plot Panel Container =-=-
             # Setup
         plot_container = QWidget()
@@ -299,25 +300,80 @@ class MainWindow(QMainWindow):
 
             # =- Plots -=
         plot_panel = QWidget()
-        plot_panel.setStyleSheet("background-color: #e0e0e0;")
+        plot_panel.setStyleSheet("background-color: white;")
         plot_layout = QGridLayout(plot_panel)
         plot_layout.setSpacing(10)
         plot_panel.setFixedSize(1000, 1000)
 
-            # 6 plots in 3x2 grid
-        for row in range(3):
-            for col in range(2):
-                plot_widget = QLabel(f"Plot {row * 2 + col + 1}")
-                plot_widget.setStyleSheet("background-color: white; border: 1px solid #999;")
-                plot_widget.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                plot_layout.addWidget(plot_widget, row, col)
+        # Create 6 actual plot widgets for data channels
+        self.plots = {}
+        self.plot_data = {}
+        channel_names = ['Channel 1', 'Channel 2', 'Channel 3', 'Channel 4', 'Channel 5', 'Channel 6']
+        
+        for i, channel in enumerate(channel_names):
+            row = i // 2
+            col = i % 2
+            
+            # Create plot widget with light mode styling
+            plot_widget = pg.PlotWidget(title=channel)
+            plot_widget.setBackground('white')  # Set background to white
+            
+            # Configure labels and grid
+            plot_widget.setLabel('left', 'Value', color='black', size='10pt')
+            plot_widget.setLabel('bottom', 'Time', color='black', size='10pt')
+            plot_widget.showGrid(x=True, y=True, alpha=0.3)
+            
+            # Style the axes
+            ax = plot_widget.getAxis('left')
+            ax.setPen(color='black', width=1)
+            ax.setTextPen(color='black')
+            
+            ax = plot_widget.getAxis('bottom') 
+            ax.setPen(color='black', width=1)
+            ax.setTextPen(color='black')
+            
+            # Style the title
+            plot_widget.plotItem.setTitle(channel, color='black', size='12pt')
+            
+            # Store reference and initialize data
+            self.plots[channel] = plot_widget
+            self.plot_data[channel] = {'x': [], 'y': []}
+            
+            plot_layout.addWidget(plot_widget, row, col)
+
 
         # add to container layout
         plot_container_layout.addWidget(plot_panel)
         main_layout.addWidget(plot_container)
-
-
-
-
+        
         # =-= Add Main Layout to central widget =-=
         central_widget.setLayout(main_layout)
+    
+    def update_plot(self, channel_name, x_value, y_value):
+        """Update a specific plot with new data point."""
+        if channel_name in self.plots:
+            self.plot_data[channel_name]['x'].append(x_value)
+            self.plot_data[channel_name]['y'].append(y_value)
+            
+            # Keep only last 1000 points for performance
+            if len(self.plot_data[channel_name]['x']) > 1000:
+                self.plot_data[channel_name]['x'] = self.plot_data[channel_name]['x'][-1000:]
+                self.plot_data[channel_name]['y'] = self.plot_data[channel_name]['y'][-1000:]
+            
+            # Update the plot
+            self.plots[channel_name].plot(
+                self.plot_data[channel_name]['x'], 
+                self.plot_data[channel_name]['y'], 
+                clear=True, 
+                pen='blue'
+            )
+    
+    def clear_plots(self):
+        """Clear all plot data."""
+        for channel in self.plots:
+            self.plot_data[channel] = {'x': [], 'y': []}
+            self.plots[channel].clear()
+
+
+
+

@@ -4,30 +4,36 @@
 import sys      
 from PyQt6.QtWidgets import QApplication
 
-# new
+# Import from local files
 from ViewScripts.main_window import MainWindow
-#from ControllerScripts.button_controller import ButtonController
-
-# Old
-#from ViewScripts.gui_window import ScientificGUI
-#from ControllerScripts.socket_controller import ScientificController
+from ModelScripts.state_manager import StateManager
+from ModelScripts.data_store import DataStore
+from ModelScripts.playback_manager import PlaybackManager
+from ControllerScripts.button_controller import ButtonController
+from ModelScripts.recording_manager import RecordingManager
 
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)    # Initialize Qt app anvironment
     
-    # new
-    main_window = MainWindow() # Create instance of the main window
-    #controller = ButtonController(main_window) # Create instance of the controller
+    # Create Model Layer
+    state_manager = StateManager()
+    data_store = DataStore(max_size=10000)
+    playback_manager = PlaybackManager(data_store, playback_rate_ms=100)
+    recording_manager = RecordingManager(data_store)
+
+    # Create View Layer
+    main_window = MainWindow()
+
+    # Create Controller Layer
+    controller = ButtonController(
+        main_window=main_window,
+        state_manager=state_manager,
+        data_store=data_store,
+        playback_manager=playback_manager,
+        recording_manager=recording_manager
+    )
+
+    # Start App
     main_window.show() # Show the window
     sys.exit(app.exec())    # Execute the app event loop
-
-
-    # =-=-=- old
-    # Instantiate components
-    #window = ScientificGUI()    # View: Create UI elements
-    #controller = ScientificController(window)   # Controller: Takes view instance, register clicks and status
-
-    # Execute
-    #window.show()   # Show the GUI window on screen
-    #sys.exit(app.exec())    # 
