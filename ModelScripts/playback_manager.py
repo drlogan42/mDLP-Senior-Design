@@ -1,17 +1,13 @@
 '''
 PlaybackManager loads CSV files and feeds rows to data_store on a timer to emulate serial data input for playback mode.
-
-Model:
-- Loads CSV file into memory once
-- Uses QTimer to emit rows at controlled rate
-Controller calls load_file(), play(), stop().
-This calls data_store.add() on each timer tick.
 '''
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal
 import csv
 from pathlib import Path
-from typing import Optional
+from ModelScripts.mdlp_parser import MDLPParser, is_raw_mdlp_format
+
+
 
 class PlaybackManager(QObject):
     playback_finished = pyqtSignal()
@@ -28,6 +24,7 @@ class PlaybackManager(QObject):
         self._current_index = 0
         self._is_playing = False
         self._file_path = None
+        self._is_raw_format = False
 
         # Timer for row-by-row emission
         self._timer = QTimer()
@@ -47,13 +44,13 @@ class PlaybackManager(QObject):
                 self.error_occurred.emit(f"Not a CSV file: {path.suffix}")
                 return False
             
-            # Read CSV into list of dicts
-            self._loaded_rows = []
-            with open(path, 'r', newline='') as csvfile:
-                reader = csv.DictReader(csvfile)
-                for row in reader:
-                    parsed_row = self._parse_row(row)
-                    self._loaded_rows.append(parsed_row)
+            # Detect format and load accordingly
+            self._is_raw_format = is_raw_mdlp_format(file_path)
+            
+            if self._is_raw_format:
+                self._loaded_rows = self._load_raw_mdlp(file_path)
+            else:
+                self._loaded_rows = self._load_parsed_csv(file_path)
             
             if not self._loaded_rows:
                 self.error_occurred.emit("CSV file is empty")
@@ -69,8 +66,54 @@ class PlaybackManager(QObject):
         except Exception as e:
             self.error_occurred.emit(f"Error loading file: {str(e)}")
             return False
+        
+    def _load_raw_mdlp(self, file_path: str) -> list:
+        """Load raw mDLP CSV by feeding all bytes through a fresh parser instance.
+        
+        Uses a separate parser instance to avoid signal disconnect/reconnect issues
+        with the main self._parser (which is reserved for future serial use).
+        """
+        file_parser = MDLPParser()
+        parsed_rows = []
+        
+        # Connect to local list collector
+        file_parser.packet_ready.connect(lambda row: parsed_rows.append(row))
+        
+        with open(file_path, 'r', newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            
+            for row in reader:
+                # Extract timestamp
+                time_val = None
+                for time_col in ['Time [s]', 'Time_s_', 'time', 'Time']:
+                    if time_col in row and row[time_col].strip():
+                        time_val = float(row[time_col])
+                        break
+                
+                # Extract byte value
+                byte_val = None
+                for val_col in ['Value', 'value', 'Data', 'data']:
+                    if val_col in row and row[val_col].strip():
+                        byte_val = int(float(row[val_col]))
+                        break
+                
+                if time_val is not None and byte_val is not None:
+                    file_parser.feed_byte(byte_val, time_val)
+        
+        return parsed_rows
+    
+    def _load_parsed_csv(self, file_path: str) -> list:
+        """Load a pre-parsed CSV file (original behavior)."""
+        rows = []
+        with open(file_path, 'r', newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                parsed_row = self._parse_row(row)
+                rows.append(parsed_row)
+        return rows
     
     def _parse_row(self, row: dict) -> dict:
+        """Convert CSV string values to appropriate numeric types."""
         parsed = {}
         for key, value in row.items():
             try:
@@ -84,6 +127,7 @@ class PlaybackManager(QObject):
                 parsed[key] = value
         return parsed
     
+
     # =-= Playback Control =-=
     def play(self) -> None:
         if not self._loaded_rows:
@@ -121,7 +165,9 @@ class PlaybackManager(QObject):
     def _on_timer_tick(self) -> None:
         if self._current_index >= len(self._loaded_rows):
             # Reached end of file
-            self.stop()
+            self._timer.stop()
+            self._is_playing = False
+            self._current_index = 0
             self._set_state("finished")
             self.playback_finished.emit()
             return
@@ -156,7 +202,8 @@ class PlaybackManager(QObject):
             'filename': Path(self._file_path).name if self._file_path else "Unknown",
             'row_count': len(self._loaded_rows),
             'channels': list(self._loaded_rows[0].keys()) if self._loaded_rows else [],
-            'current_row': self._current_index
+            'current_row': self._current_index,
+            'format': 'raw_mdlp' if self._is_raw_format else 'parsed_csv'
         }
 
     def set_playback_rate(self, rate_ms: int) -> None:

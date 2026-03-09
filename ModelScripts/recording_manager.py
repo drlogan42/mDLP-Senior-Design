@@ -1,10 +1,5 @@
 '''
 RecordingManager - Saves incoming data to CSV
-
-Model:
-- Listens to data_store for signals
-- Writes data to CSV when recording mode is active
-- Manages file creation and writing
 '''
 
 from PyQt6.QtCore import QObject, pyqtSignal

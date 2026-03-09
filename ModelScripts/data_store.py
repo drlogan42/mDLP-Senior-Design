@@ -1,11 +1,6 @@
 '''
 data_store.py is central data buffer for all incoming data
 
-Model:
-- Holds data rows in thread-safe deque
-- emit qt signal when data changes
-- no logic, no io or ui ref
-any input calls add(). any consumer connects to signals
 '''
 from PyQt6.QtCore import QObject, pyqtSignal
 from collections import deque

@@ -1,25 +1,20 @@
 '''
 ButtonController - bridge model and view
-
-Controller
-- connect UI buttons to model method calls
--  connect model signals to ui updates
-- purely a bridge, no logic, no io, no state management
 '''
 
 from PyQt6.QtWidgets import QFileDialog
 from PyQt6.QtCore import QObject
 from pathlib import Path
-import pyqtgraph as pg
 
 class ButtonController(QObject):
-    def __init__(self, main_window, state_manager, data_store, playback_manager, recording_manager):
+    def __init__(self, main_window, state_manager, data_store, playback_manager, serial_manager, recording_manager):
         super().__init__()
         # Store references to View and Models
         self.main_window = main_window
         self.state_manager = state_manager
         self.data_store = data_store
         self.playback_manager = playback_manager
+        self.serial_manager = serial_manager
         self.recording_manager = recording_manager
         
         # Connect all signals
@@ -28,6 +23,9 @@ class ButtonController(QObject):
         
         # Initialize UI state
         self._update_ui_from_state()
+
+        # Initial port scan
+        self.on_serial_refresh_click()
     
     # =-= UI Signal Connections =-=
     def _connect_ui_signals(self):
@@ -39,6 +37,11 @@ class ButtonController(QObject):
         self.main_window.clear_btn.clicked.connect(self.on_clear_click)
         self.main_window.reset_btn.clicked.connect(self.on_reset_click)
         
+        # Serial Panel buttons
+        self.main_window.serial_connect_btn.clicked.connect(self.on_serial_connect_click)
+        self.main_window.serial_disconnect_btn.clicked.connect(self.on_serial_disconnect_click)
+        self.main_window.serial_refresh_btn.clicked.connect(self.on_serial_refresh_click)
+
         # Playback Panel buttons
         self.main_window.playback_browse_btn.clicked.connect(self.on_playback_browse_click)
         self.main_window.playback_play_btn.clicked.connect(self.on_playback_play_click)
@@ -62,6 +65,12 @@ class ButtonController(QObject):
         self.playback_manager.state_changed.connect(self.on_playback_state_changed)
         self.playback_manager.playback_finished.connect(self.on_playback_finished)
     
+        # Serial Manager signals
+        self.serial_manager.connected.connect(self.on_serial_connected)
+        self.serial_manager.disconnected.connect(self.on_serial_disconnected)
+        self.serial_manager.error_occurred.connect(self.on_serial_error)
+        self.serial_manager.ports_updated.connect(self.on_ports_updated)
+
         # Recording Manager signals
         self.recording_manager.recording_started.connect(self.on_recording_started)
         self.recording_manager.recording_stopped.connect(self.on_recording_stopped)
@@ -70,24 +79,19 @@ class ButtonController(QObject):
 
     # =-= Control Panel Handlers =-=
     def on_streaming_click(self):
-        self.state_manager.set_streaming_mode()  
-
-        # Stop any active playback
         if self.playback_manager.is_playing():
             self.playback_manager.stop()
 
-        # Update UI
+        self.state_manager.set_streaming_mode()  
         self._update_console("Switched to Streaming mode")
-        self._update_status("Mode: Streaming")
         self._update_ui_from_state()
 
     def on_playback_click(self):
-        """Handle Playback mode button click."""
+        if self.serial_manager.is_connected():
+            self.serial_manager.disconnect()
+
         self.state_manager.set_playback_mode()
-        
-        # Update UI
         self._update_console("Switched to Playback mode")
-        self._update_status("Mode: Playback")
         self._update_ui_from_state()
     
     
@@ -106,19 +110,81 @@ class ButtonController(QObject):
         self._update_stats()
     
     def on_reset_click(self):
-        # Stop any active playback
         self.playback_manager.stop()
+        if self.serial_manager.is_connected():
+            self.serial_manager.disconnect()
+        if self.recording_manager.is_recording():
+            self.recording_manager.stop_recording()
         
-        # Clear data
         self.data_store.clear()
-        
-        # Reset state
         self.state_manager.reset_program()
         
-        # Update UI
+        self.main_window.playback_file_data.setText("None")
+        self.main_window.data_folder_data.setText("None")
+        self.main_window.file_name_data.setText("None")
+        self.main_window.serial_status_label.setText("Status: Disconnected")
+        self.main_window.serial_status_label.setStyleSheet("color: #f44336; font-size: 11px;")
+        
         self._update_console("Program reset")
-        self._update_status("Status: Ready")
         self._update_ui_from_state()
+
+    # =-= Serial Handlers =-=
+
+    def on_serial_refresh_click(self):
+        ports = self.serial_manager.scan_ports()
+        if not ports:
+            self._update_console("No serial ports found")
+
+    def on_serial_connect_click(self):
+        port_text = self.main_window.serial_port_combo.currentText()
+        if not port_text:
+            self._update_console("Error: No port selected")
+            return
+
+        port_name = port_text.split(" - ")[0].strip()
+        baud_rate = int(self.main_window.serial_baud_combo.currentText())
+
+        if self.state_manager.mode != "Streaming":
+            self.state_manager.set_streaming_mode()
+
+        self._update_console(f"Connecting to {port_name} at {baud_rate}...")
+        self.serial_manager.connect(port_name, baud_rate)
+
+    def on_serial_disconnect_click(self):
+        self.serial_manager.disconnect()
+        self._update_console("Serial disconnected")
+
+    def on_serial_connected(self, port_name: str):
+        self.state_manager.connection_status = "connected"
+        self.state_manager.receiving = True
+
+        self.main_window.serial_status_label.setText(f"Status: Connected ({port_name})")
+        self.main_window.serial_status_label.setStyleSheet("color: #4CAF50; font-size: 11px;")
+        self.main_window.serial_connect_btn.setEnabled(False)
+        self.main_window.serial_disconnect_btn.setEnabled(True)
+
+        self._update_console(f"Connected to {port_name}")
+        self._update_ui_from_state()
+
+    def on_serial_disconnected(self):
+        self.state_manager.connection_status = "not connected"
+        self.state_manager.receiving = False
+
+        self.main_window.serial_status_label.setText("Status: Disconnected")
+        self.main_window.serial_status_label.setStyleSheet("color: #f44336; font-size: 11px;")
+        self.main_window.serial_connect_btn.setEnabled(True)
+        self.main_window.serial_disconnect_btn.setEnabled(False)
+
+        self._update_ui_from_state()
+
+    def on_serial_error(self, error_message: str):
+        self._update_console(f"Serial Error: {error_message}")
+
+    def on_ports_updated(self, ports: list):
+        self.main_window.serial_port_combo.clear()
+        for port_info in ports:
+            display_text = f"{port_info['port']} - {port_info['description']}"
+            self.main_window.serial_port_combo.addItem(display_text)
 
     # =-= Playback Handlers =-=
 
@@ -162,8 +228,6 @@ class ButtonController(QObject):
     # =-= Recording Handlers =-=
 
     def on_recording_browse_click(self):
-        from PyQt6.QtWidgets import QFileDialog
-        
         folder = QFileDialog.getExistingDirectory(
             self.main_window,
             "Select Recording Folder",
@@ -178,7 +242,6 @@ class ButtonController(QObject):
                 self._update_console(f"Recording folder set: {folder_name}")
     
     def on_recording_play_click(self):
-        """Handle Start Recording button in Recording Panel."""
         if not self.recording_manager.is_recording():
             success = self.recording_manager.start_recording()
             if success:
@@ -187,7 +250,6 @@ class ButtonController(QObject):
                 self._update_ui_from_state()
     
     def on_recording_stop_click(self):
-        """Handle Stop Recording button in Recording Panel."""
         if self.recording_manager.is_recording():
             self.recording_manager.stop_recording()
             self.state_manager.is_recording = False
@@ -262,7 +324,7 @@ class ButtonController(QObject):
         # Update mode status
         self.main_window.status1.setText(f"Mode: {self.state_manager.mode}")
         
-        # Update recording status
+        # Update recording status and button
         is_recording = self.recording_manager.is_recording()
         if is_recording:
             self.main_window.status2.setText("Recording: ON")
@@ -288,23 +350,35 @@ class ButtonController(QObject):
         else:
             self.main_window.playback_play_btn.setEnabled(False)
             self.main_window.playback_stop_btn.setEnabled(False)
+
+        # Update serial button states
+        if self.serial_manager.is_connected():
+            self.main_window.serial_connect_btn.setEnabled(False)
+            self.main_window.serial_disconnect_btn.setEnabled(True)
+            self.main_window.serial_port_combo.setEnabled(False)
+            self.main_window.serial_baud_combo.setEnabled(False)
+        else:
+            self.main_window.serial_connect_btn.setEnabled(True)
+            self.main_window.serial_disconnect_btn.setEnabled(False)
+            self.main_window.serial_port_combo.setEnabled(True)
+            self.main_window.serial_baud_combo.setEnabled(True)
     
 
     
     def _update_plots(self, row: dict):
         """Update plots with new data from data_store."""
-        # Map CSV data keys to plot channels based on hardware format
+        # Map parsed mDLP data keys to plot channels
         channel_mapping = {
-            'Channel 1': 'dac_counts',        # Plot 1 shows DAC values
-            'Channel 2': 'integrator_adc',    # Plot 2 shows integrator ADC
-            'Channel 3': 'ltc_adc_a',         # Plot 3 shows LTC ADC A
-            'Channel 4': 'ltc_adc_b',         # Plot 4 shows LTC ADC B
-            'Channel 5': 'frame_id',          # Plot 5 shows frame ID
-            'Channel 6': 'packet_id'          # Plot 6 shows packet ID
+            'Channel 1': 'dac_v',
+            'Channel 2': 'integrator_v',
+            'Channel 3': 'adc_a_current',
+            'Channel 4': 'adc_b_current',
+            'Channel 5': 'diff_v',
+            'Channel 6': 'diff_i',
         }
         
-        # Use total received count as x-axis (time/sample number)
-        x_value = self.data_store.total_received()
+        # Use timestamp from parsed data if available, fall back to sample count
+        x_value = row.get('sample_time', row.get('timestamp', self.data_store.total_received()))
         
         # Update each plot with corresponding data
         for channel_name, data_key in channel_mapping.items():

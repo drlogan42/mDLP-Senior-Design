@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QMainWindow, QPushButton, QLabel, QVBoxLayout, QWidget, QGridLayout, QHBoxLayout, QTextEdit
+from PyQt6.QtWidgets import QMainWindow, QPushButton, QLabel, QVBoxLayout, QWidget, QGridLayout, QHBoxLayout, QTextEdit, QComboBox
 from PyQt6.QtCore import Qt
 import pyqtgraph as pg
 
@@ -114,49 +114,63 @@ class MainWindow(QMainWindow):
 
 
 
-        # =-= Streaming Panel =-=-
+
+        # =-= Serial Panel =-=-
 
             # Title
-        streaming_title = QLabel("Streaming Panel")
-        streaming_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #333;")
-        left_layout.addWidget(streaming_title)
+        serial_title = QLabel("Serial Connection")
+        serial_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #333;")
+        left_layout.addWidget(serial_title)
 
-            # Setup                
-        streaming_panel = QWidget()
-        streaming_panel_layout = QGridLayout(streaming_panel)
-        streaming_panel.setStyleSheet("background-color: #e0e0e0;")
-        streaming_panel_layout.setSpacing(10)
-        streaming_panel_layout.setColumnStretch(0, 1)
-        streaming_panel_layout.setColumnStretch(1, 0)
-        streaming_panel.setFixedWidth(300)
-        streaming_panel.setFixedHeight(130)
+            # Setup
+        serial_panel = QWidget()
+        serial_panel_layout = QGridLayout(serial_panel)
+        serial_panel.setStyleSheet("background-color: #e0e0e0;")
+        serial_panel_layout.setSpacing(10)
+        serial_panel.setFixedWidth(300)
+        serial_panel.setFixedHeight(160)
 
-            # Port info
-        streaming_panel_layout.addWidget(QLabel("Port:"), 0, 0)
-        self.port_data = QLabel("00000")
-        self.port_data.setStyleSheet("background-color: white; padding: 5px;")
-        streaming_panel_layout.addWidget(self.port_data, 0, 1)
+            # Port selection
+        serial_panel_layout.addWidget(QLabel("Port:"), 0, 0)
+        self.serial_port_combo = QComboBox()
+        self.serial_port_combo.setMinimumWidth(120)
+        self.serial_port_combo.setStyleSheet("background-color: white; color: #333; padding: 2px;")
+        serial_panel_layout.addWidget(self.serial_port_combo, 0, 1)
+        self.serial_refresh_btn = QPushButton("Refresh")
+        self.serial_refresh_btn.setStyleSheet("background-color: #607D8B; color: white; font-weight: bold;")
+        serial_panel_layout.addWidget(self.serial_refresh_btn, 0, 2)
 
-            # Baud Rate info
-        streaming_panel_layout.addWidget(QLabel("BAUD Rate"), 1, 0)
-        self.baud_data = QLabel("00000")
-        self.baud_data.setStyleSheet("background-color: white; padding: 5px;")
-        streaming_panel_layout.addWidget(self.baud_data, 1, 1)
+            # Baud rate
+        serial_panel_layout.addWidget(QLabel("Baud:"), 1, 0)
+        self.serial_baud_combo = QComboBox()
+        self.serial_baud_combo.addItems(['921600', '460800', '230400', '115200', '57600', '38400', '19200', '9600'])
+        self.serial_baud_combo.setCurrentText('921600')
+        self.serial_baud_combo.setStyleSheet("background-color: white; color: #333; padding: 2px;")
+        serial_panel_layout.addWidget(self.serial_baud_combo, 1, 1)
 
-            # Connection status
-        streaming_panel_layout.addWidget(QLabel("Connection:"), 2, 0)
-        self.connection_data = QLabel("not connected")
-        self.connection_data.setStyleSheet("background-color: white; padding: 5px;")
-        streaming_panel_layout.addWidget(self.connection_data, 2, 1)
+            # Connect & Disconnect
+        self.serial_connect_btn = QPushButton("Connect")
+        self.serial_connect_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+        serial_panel_layout.addWidget(self.serial_connect_btn, 2, 1)
+        self.serial_disconnect_btn = QPushButton("Disconnect")
+        self.serial_disconnect_btn.setStyleSheet("background-color: #f44336; color: white; font-weight: bold;")
+        self.serial_disconnect_btn.setEnabled(False)
+        serial_panel_layout.addWidget(self.serial_disconnect_btn, 2, 2)
 
-            # Receiving status
-        streaming_panel_layout.addWidget(QLabel("Receiving: "), 3, 0)
-        self.receiving_data = QLabel("false")
-        self.receiving_data.setStyleSheet("background-color: white; padding: 5px;")
-        streaming_panel_layout.addWidget(self.receiving_data, 3, 1)
+            # Status
+        self.serial_status_label = QLabel("Status: Disconnected")
+        self.serial_status_label.setStyleSheet("color: #f44336; font-size: 11px;")
+        self.serial_status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        serial_panel_layout.addWidget(self.serial_status_label, 3, 0, 1, 3)
 
-            # add to layout
-        left_layout.addWidget(streaming_panel)
+            # Add to layout
+        left_layout.addWidget(serial_panel)
+        
+
+
+
+
+
 
 
 
@@ -308,22 +322,29 @@ class MainWindow(QMainWindow):
         # Create 6 actual plot widgets for data channels
         self.plots = {}
         self.plot_data = {}
-        channel_names = ['Channel 1', 'Channel 2', 'Channel 3', 'Channel 4', 'Channel 5', 'Channel 6']
+        self.plot_colors = {}
         
-        for i, channel in enumerate(channel_names):
+        # Channel config: (internal_name, display_title, y_label, y_units, pen_color)
+        channel_config = [
+            ('Channel 1', 'DAC Voltage',         'Voltage',  'V',  '#2196F3'),
+            ('Channel 2', 'Integrator Voltage',   'Voltage',  'V',  '#4CAF50'),
+            ('Channel 3', 'ADC A Current',        'Current',  'A',  '#FF9800'),
+            ('Channel 4', 'ADC B Current',        'Current',  'A',  '#F44336'),
+            ('Channel 5', 'Differential Voltage', 'Voltage',  'V',  '#9C27B0'),
+            ('Channel 6', 'Differential Current', 'Current',  'A',  '#00BCD4'),
+        ]
+        
+        for i, (channel, title, y_label, y_units, color) in enumerate(channel_config):
             row = i // 2
             col = i % 2
             
-            # Create plot widget with light mode styling
-            plot_widget = pg.PlotWidget(title=channel)
-            plot_widget.setBackground('white')  # Set background to white
+            plot_widget = pg.PlotWidget(title=title)
+            plot_widget.setBackground('white')
             
-            # Configure labels and grid
-            plot_widget.setLabel('left', 'Value', color='black', size='10pt')
-            plot_widget.setLabel('bottom', 'Time', color='black', size='10pt')
+            plot_widget.setLabel('left', y_label, units=y_units, color='black', size='10pt')
+            plot_widget.setLabel('bottom', 'Time', units='s', color='black', size='10pt')
             plot_widget.showGrid(x=True, y=True, alpha=0.3)
             
-            # Style the axes
             ax = plot_widget.getAxis('left')
             ax.setPen(color='black', width=1)
             ax.setTextPen(color='black')
@@ -332,12 +353,11 @@ class MainWindow(QMainWindow):
             ax.setPen(color='black', width=1)
             ax.setTextPen(color='black')
             
-            # Style the title
-            plot_widget.plotItem.setTitle(channel, color='black', size='12pt')
+            plot_widget.plotItem.setTitle(title, color='black', size='12pt')
             
-            # Store reference and initialize data
             self.plots[channel] = plot_widget
             self.plot_data[channel] = {'x': [], 'y': []}
+            self.plot_colors[channel] = color
             
             plot_layout.addWidget(plot_widget, row, col)
 
@@ -360,12 +380,13 @@ class MainWindow(QMainWindow):
                 self.plot_data[channel_name]['x'] = self.plot_data[channel_name]['x'][-1000:]
                 self.plot_data[channel_name]['y'] = self.plot_data[channel_name]['y'][-1000:]
             
-            # Update the plot
+            # Update the plot with channel-specific color
+            color = self.plot_colors.get(channel_name, 'blue')
             self.plots[channel_name].plot(
                 self.plot_data[channel_name]['x'], 
                 self.plot_data[channel_name]['y'], 
                 clear=True, 
-                pen='blue'
+                pen=color
             )
     
     def clear_plots(self):
