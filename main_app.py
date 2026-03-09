@@ -1,7 +1,12 @@
 # main_app.py
 
 # Import from Library
-import sys      
+import sys
+import os
+
+# Fix Python path for imports
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+      
 from PyQt6.QtWidgets import QApplication
 
 # Import from local files

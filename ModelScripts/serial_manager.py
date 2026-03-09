@@ -92,7 +92,7 @@ class SerialManager(QObject):
     ports_updated = pyqtSignal(list)    # list of port info dicts
 
     # Default serial settings for mDLP device
-    DEFAULT_BAUD = 921600
+    DEFAULT_BAUD = 115200
     DEFAULT_TIMEOUT = 0.1   # Read timeout in seconds
 
     def __init__(self, data_store):
@@ -147,7 +147,7 @@ class SerialManager(QObject):
         
         Args:
             port_name: COM port (e.g., 'COM3', '/dev/ttyUSB0')
-            baud_rate: Baud rate (default: 921600 for mDLP)
+            baud_rate: Baud rate (default: 115200 for mDLP)
             
         Returns:
             True if connection successful
