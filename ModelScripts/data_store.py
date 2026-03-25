@@ -34,7 +34,7 @@ class DataStore(QObject):
         self.data_added.emit(row)
     
     # Dont know if i want to keep this if i want to read from a file as if serial
-    def add_bulk(self, rows: list) -> None:
+    def add_bulk(self, rows: list, unlimited: bool = False) -> None:
 
         # Add multiple rows at once without emitting per row for loading from file
         # emit single data_added with last row to trigger 
@@ -42,9 +42,15 @@ class DataStore(QObject):
             return
 
         with self._lock:
-            for row in rows:
-                self._buffer.append(row)
-                self._total_received += 1
+            if unlimited and len(rows) > self._max_size:
+                # Replace buffer with unlimited deque for bulk loading
+                self._buffer = deque(rows)
+                self._total_received += len(rows)
+            else:
+                # Normal behavior with size limit
+                for row in rows:
+                    self._buffer.append(row)
+                    self._total_received += 1
 
         self.data_added.emit(rows[-1])
     

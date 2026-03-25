@@ -129,6 +129,20 @@ class PlaybackManager(QObject):
     
 
     # =-= Playback Control =-=
+    def bulk_load(self) -> bool:
+        """Load all rows into data_store at once for instant plotting."""
+        if not self._loaded_rows:
+            self.error_occurred.emit("No file loaded")
+            return False
+
+        if self._is_playing:
+            self.stop()
+
+        self._data_store.add_bulk(self._loaded_rows, unlimited=True)
+        self._current_index = len(self._loaded_rows)
+        self._set_state("bulk_loaded")
+        return True
+
     def play(self) -> None:
         if not self._loaded_rows:
             self.error_occurred.emit("No file loaded")

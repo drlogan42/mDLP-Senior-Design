@@ -201,10 +201,13 @@ class MainWindow(QMainWindow):
         self.playback_browse_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
         playback_panel_layout.addWidget(self.playback_browse_btn, 0, 2)
 
-            # Play & Stop
+            # Play, Bulk Plot & Stop
         self.playback_play_btn = QPushButton("Play")
         self.playback_play_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
-        playback_panel_layout.addWidget(self.playback_play_btn, 1, 1)
+        playback_panel_layout.addWidget(self.playback_play_btn, 1, 0)
+        self.playback_bulk_btn = QPushButton("Bulk Plot")
+        self.playback_bulk_btn.setStyleSheet("background-color: #FF9800; color: white; font-weight: bold;")
+        playback_panel_layout.addWidget(self.playback_bulk_btn, 1, 1)
         self.playback_stop_btn = QPushButton("Stop")
         self.playback_stop_btn.setStyleSheet("background-color: #FF6B6B; color: white; font-weight: bold;")
         playback_panel_layout.addWidget(self.playback_stop_btn, 1, 2)

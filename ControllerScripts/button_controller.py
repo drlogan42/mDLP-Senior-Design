@@ -45,6 +45,7 @@ class ButtonController(QObject):
         # Playback Panel buttons
         self.main_window.playback_browse_btn.clicked.connect(self.on_playback_browse_click)
         self.main_window.playback_play_btn.clicked.connect(self.on_playback_play_click)
+        self.main_window.playback_bulk_btn.clicked.connect(self.on_playback_bulk_click)
         self.main_window.playback_stop_btn.clicked.connect(self.on_playback_stop_click)
         
         # Recording Panel buttons (for future recording_manager)
@@ -99,10 +100,12 @@ class ButtonController(QObject):
         self.state_manager.show_console()
         self.main_window.console_text.setVisible(True)
         self._update_console("Console shown")
+        self._update_ui_from_state()
     
     def on_hidden_click(self):
         self.state_manager.hide_console()
         self.main_window.console_text.setVisible(False)
+        self._update_ui_from_state()
     
     def on_clear_click(self):
         self.data_store.clear()
@@ -221,6 +224,21 @@ class ButtonController(QObject):
         
         self._update_console("Playback started")
     
+    def on_playback_bulk_click(self):
+        if not self.playback_manager.is_loaded():
+            self._update_console("Error: No file loaded")
+            return
+
+        self.state_manager.set_playback_mode()
+        self.data_store.clear()
+
+        success = self.playback_manager.bulk_load()
+        if success:
+            self._bulk_plot_all()
+            info = self.playback_manager.get_file_info()
+            self._update_console(f"Bulk plotted {info['row_count']} rows")
+        self._update_ui_from_state()
+
     def on_playback_stop_click(self):
         self.playback_manager.stop()
         self._update_console("Playback stopped")
@@ -337,18 +355,29 @@ class ButtonController(QObject):
         
         # Update mode buttons
         if self.state_manager.mode == "Streaming":
-            self.main_window.streaming_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
-            self.main_window.playback_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
-        elif self.state_manager.mode == "Playback":
-            self.main_window.streaming_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
+            self.main_window.streaming_btn.setStyleSheet("background-color: #0D47A1; color: white; font-weight: bold;")
             self.main_window.playback_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
+        elif self.state_manager.mode == "Playback":
+            # Change to even darker color
+            self.main_window.streaming_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
+            self.main_window.playback_btn.setStyleSheet("background-color: #0D47A1; color: white; font-weight: bold;")
+        
+        # Update console toggle buttons
+        if self.main_window.console_text.isVisible():
+            self.main_window.visible_btn.setStyleSheet("background-color: #0D47A1; color: white; font-weight: bold;")
+            self.main_window.hidden_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
+        else:
+            self.main_window.visible_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
+            self.main_window.hidden_btn.setStyleSheet("background-color: #0D47A1; color: white; font-weight: bold;")
         
         # Update playback button states
         if self.playback_manager.is_loaded():
             self.main_window.playback_play_btn.setEnabled(not self.playback_manager.is_playing())
+            self.main_window.playback_bulk_btn.setEnabled(not self.playback_manager.is_playing())
             self.main_window.playback_stop_btn.setEnabled(self.playback_manager.is_playing())
         else:
             self.main_window.playback_play_btn.setEnabled(False)
+            self.main_window.playback_bulk_btn.setEnabled(False)
             self.main_window.playback_stop_btn.setEnabled(False)
 
         # Update serial button states
@@ -386,6 +415,35 @@ class ButtonController(QObject):
                 y_value = row[data_key]
                 self.main_window.update_plot(channel_name, x_value, y_value)
     
+    def _bulk_plot_all(self):
+        """Plot all data in data_store at once."""
+        self._clear_plots()
+        all_rows = self.data_store.get_all()
+        channel_mapping = {
+            'Channel 1': 'dac_v',
+            'Channel 2': 'integrator_v',
+            'Channel 3': 'adc_a_current',
+            'Channel 4': 'adc_b_current',
+            'Channel 5': 'diff_v',
+            'Channel 6': 'diff_i',
+        }
+        for row in all_rows:
+            x_value = row.get('sample_time', row.get('timestamp', 0))
+            for channel_name, data_key in channel_mapping.items():
+                if data_key in row:
+                    self.main_window.plot_data[channel_name]['x'].append(x_value)
+                    self.main_window.plot_data[channel_name]['y'].append(row[data_key])
+
+        for channel_name in channel_mapping:
+            if self.main_window.plot_data[channel_name]['x']:
+                color = self.main_window.plot_colors.get(channel_name, 'blue')
+                self.main_window.plots[channel_name].plot(
+                    self.main_window.plot_data[channel_name]['x'],
+                    self.main_window.plot_data[channel_name]['y'],
+                    clear=True,
+                    pen=color
+                )
+
     def _clear_plots(self):
         self.main_window.clear_plots()
     
