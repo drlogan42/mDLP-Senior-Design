@@ -326,6 +326,7 @@ class MainWindow(QMainWindow):
         self.plots = {}
         self.plot_data = {}
         self.plot_colors = {}
+        self.plot_curves = {}
         
         # Channel config: (internal_name, display_title, y_label, y_units, pen_color)
         channel_config = [
@@ -361,6 +362,7 @@ class MainWindow(QMainWindow):
             self.plots[channel] = plot_widget
             self.plot_data[channel] = {'x': [], 'y': []}
             self.plot_colors[channel] = color
+            self.plot_curves[channel] = plot_widget.plot(pen=pg.mkPen(color, width=1))
             
             plot_layout.addWidget(plot_widget, row, col)
 
@@ -374,29 +376,27 @@ class MainWindow(QMainWindow):
     
     def update_plot(self, channel_name, x_value, y_value):
         """Update a specific plot with new data point."""
-        if channel_name in self.plots:
-            self.plot_data[channel_name]['x'].append(x_value)
-            self.plot_data[channel_name]['y'].append(y_value)
-            
-            # Keep only last 1000 points for performance
-            if len(self.plot_data[channel_name]['x']) > 1000:
-                self.plot_data[channel_name]['x'] = self.plot_data[channel_name]['x'][-1000:]
-                self.plot_data[channel_name]['y'] = self.plot_data[channel_name]['y'][-1000:]
-            
-            # Update the plot with channel-specific color
-            color = self.plot_colors.get(channel_name, 'blue')
-            self.plots[channel_name].plot(
-                self.plot_data[channel_name]['x'], 
-                self.plot_data[channel_name]['y'], 
-                clear=True, 
-                pen=color
-            )
+        if channel_name not in self.plots:
+            return
+        self.plot_data[channel_name]['x'].append(x_value)
+        self.plot_data[channel_name]['y'].append(y_value)
+        
+        # Rolling window — large enough for full file playback
+        max_pts = 50000
+        if len(self.plot_data[channel_name]['x']) > max_pts:
+            self.plot_data[channel_name]['x'] = self.plot_data[channel_name]['x'][-max_pts:]
+            self.plot_data[channel_name]['y'] = self.plot_data[channel_name]['y'][-max_pts:]
+        
+        self.plot_curves[channel_name].setData(
+            self.plot_data[channel_name]['x'],
+            self.plot_data[channel_name]['y']
+        )
     
     def clear_plots(self):
-        """Clear all plot data."""
+        """Clear all plot data and reset curves."""
         for channel in self.plots:
             self.plot_data[channel] = {'x': [], 'y': []}
-            self.plots[channel].clear()
+            self.plot_curves[channel].setData([], [])
 
 
 

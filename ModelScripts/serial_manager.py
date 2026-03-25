@@ -22,7 +22,7 @@ class SerialReader(QObject):
     Runs on a QThread. Emits byte_received for each byte read.
     This keeps the main/UI thread responsive while serial data streams in.
     """
-    byte_received = pyqtSignal(int, float)  # (byte_value, timestamp)
+    data_received = pyqtSignal(object, float)  # (bytes_chunk, timestamp)
     error_occurred = pyqtSignal(str)
     connection_lost = pyqtSignal()
 
@@ -49,9 +49,8 @@ class SerialReader(QObject):
                     data = self._serial_port.read(waiting)
                     timestamp = time.time()
 
-                    # Emit each byte individually (parser expects one at a time)
-                    for byte_val in data:
-                        self.byte_received.emit(byte_val, timestamp)
+                    # Emit entire chunk at once — parser iterates on main thread
+                    self.data_received.emit(bytes(data), timestamp)
                 else:
                     # No data available — sleep briefly to avoid busy-waiting
                     # 1ms is fast enough for 115200 baud (~11.5 KB/s)
@@ -178,7 +177,7 @@ class SerialManager(QObject):
             # Create background reader
             self._reader = SerialReader()
             self._reader.set_port(self._serial_port)
-            self._reader.byte_received.connect(self._on_byte_received)
+            self._reader.data_received.connect(self._on_data_received)
             self._reader.error_occurred.connect(self._on_reader_error)
             self._reader.connection_lost.connect(self._on_connection_lost)
 
@@ -234,9 +233,10 @@ class SerialManager(QObject):
 
     # =-= Data Flow =-=
 
-    def _on_byte_received(self, byte_value: int, timestamp: float):
-        """Feed received byte into parser (runs on main thread via signal)."""
-        self._parser.feed_byte(byte_value, timestamp)
+    def _on_data_received(self, data: bytes, timestamp: float):
+        """Feed received bytes into parser in batch (runs on main thread via signal)."""
+        for byte_val in data:
+            self._parser.feed_byte(byte_val, timestamp)
 
     def _on_packet_ready(self, row: dict):
         """Parser produced a complete data packet — send to data store."""

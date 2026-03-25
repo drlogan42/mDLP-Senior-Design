@@ -230,9 +230,15 @@ class ButtonController(QObject):
             return
 
         self.state_manager.set_playback_mode()
-        self.data_store.clear()
 
-        success = self.playback_manager.bulk_load()
+        # Disconnect data signal during bulk load to avoid per-row plot updates
+        self.data_store.data_added.disconnect(self.on_data_received)
+        self.data_store.clear()
+        try:
+            success = self.playback_manager.bulk_load()
+        finally:
+            self.data_store.data_added.connect(self.on_data_received)
+
         if success:
             self._bulk_plot_all()
             info = self.playback_manager.get_file_info()
@@ -406,8 +412,8 @@ class ButtonController(QObject):
             'Channel 6': 'diff_i',
         }
         
-        # Use timestamp from parsed data if available, fall back to sample count
-        x_value = row.get('sample_time', row.get('timestamp', self.data_store.total_received()))
+        # Use real capture timestamp for x-axis (Kingst time or serial receive time)
+        x_value = row.get('timestamp', row.get('sample_time', self.data_store.total_received()))
         
         # Update each plot with corresponding data
         for channel_name, data_key in channel_mapping.items():
@@ -416,9 +422,12 @@ class ButtonController(QObject):
                 self.main_window.update_plot(channel_name, x_value, y_value)
     
     def _bulk_plot_all(self):
-        """Plot all data in data_store at once."""
+        """Plot all data in data_store at once using efficient batch rendering."""
         self._clear_plots()
         all_rows = self.data_store.get_all()
+        if not all_rows:
+            return
+
         channel_mapping = {
             'Channel 1': 'dac_v',
             'Channel 2': 'integrator_v',
@@ -427,22 +436,16 @@ class ButtonController(QObject):
             'Channel 5': 'diff_v',
             'Channel 6': 'diff_i',
         }
-        for row in all_rows:
-            x_value = row.get('sample_time', row.get('timestamp', 0))
-            for channel_name, data_key in channel_mapping.items():
-                if data_key in row:
-                    self.main_window.plot_data[channel_name]['x'].append(x_value)
-                    self.main_window.plot_data[channel_name]['y'].append(row[data_key])
 
-        for channel_name in channel_mapping:
-            if self.main_window.plot_data[channel_name]['x']:
-                color = self.main_window.plot_colors.get(channel_name, 'blue')
-                self.main_window.plots[channel_name].plot(
-                    self.main_window.plot_data[channel_name]['x'],
-                    self.main_window.plot_data[channel_name]['y'],
-                    clear=True,
-                    pen=color
-                )
+        # Build x-values list once — use real capture timestamp for x-axis
+        x_all = [row.get('timestamp', row.get('sample_time', 0)) for row in all_rows]
+
+        for channel_name, data_key in channel_mapping.items():
+            y_all = [row.get(data_key, 0) for row in all_rows if data_key in row]
+            if y_all:
+                self.main_window.plot_data[channel_name]['x'] = list(x_all)
+                self.main_window.plot_data[channel_name]['y'] = y_all
+                self.main_window.plot_curves[channel_name].setData(x_all, y_all)
 
     def _clear_plots(self):
         self.main_window.clear_plots()

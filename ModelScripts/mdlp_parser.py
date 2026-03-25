@@ -274,11 +274,13 @@ class MDLPParser(QObject):
         diff_v = 2.0 * dac_v
         diff_i = adc_a_current - adc_b_current
 
-        # Calculate sample time within sweep
+        # Calculate sample time within sweep (matches MATLAB linspace behavior)
         sweep = self._current_sweep
-        if sweep['sweep_freq'] > 0 and sweep['sample_count'] > 0:
+        if sweep['sweep_freq'] > 0 and sweep['sample_count'] > 1:
             sample_time = (sweep['start_time'] + 
-                          (self._packet_index / sweep['sample_count']) / sweep['sweep_freq'])
+                          ((self._packet_index - 1) / (sweep['sample_count'] - 1)) / sweep['sweep_freq'])
+        elif sweep['sample_count'] == 1:
+            sample_time = sweep['start_time']
         else:
             sample_time = self._sync_timestamp
 
@@ -358,6 +360,14 @@ class MDLPParser(QObject):
     def get_current_sweep(self) -> dict:
         """Get current sweep info, or empty dict if none."""
         return self._current_sweep.copy() if self._current_sweep else {}
+    
+    def get_diagnostics(self) -> dict:
+        """Return parser state for debugging and connection info display."""
+        return {
+            'sweep_count': self._sweep_count,
+            'current_state': self._state,
+            'packet_index': self._packet_index,
+        }
     
 def is_raw_mdlp_format(file_path: str) -> bool:
     """
