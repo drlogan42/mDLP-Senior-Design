@@ -30,6 +30,7 @@ class RecordingManager(QObject):
         
         # Connect to data store
         self._data_store.data_added.connect(self._on_data_received)
+        self._data_store.data_batch_added.connect(self._on_batch_received)
         
         self._set_state("idle")
     
@@ -115,6 +116,10 @@ class RecordingManager(QObject):
         self._headers_written = False
 
     # Data Handling
+    def _on_batch_received(self, rows: list):
+        for row in rows:
+            self._on_data_received(row)
+
     def _on_data_received(self, row: dict):
         if not self._is_recording or not self._csv_writer:
             return

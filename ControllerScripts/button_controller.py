@@ -47,11 +47,19 @@ class ButtonController(QObject):
         self.main_window.playback_play_btn.clicked.connect(self.on_playback_play_click)
         self.main_window.playback_bulk_btn.clicked.connect(self.on_playback_bulk_click)
         self.main_window.playback_stop_btn.clicked.connect(self.on_playback_stop_click)
+        self.main_window.playback_speed_combo.currentTextChanged.connect(self.on_playback_speed_changed)
         
         # Recording Panel buttons (for future recording_manager)
         self.main_window.recording_browse_btn.clicked.connect(self.on_recording_browse_click)
         self.main_window.recording_play_btn.clicked.connect(self.on_recording_play_click)
         self.main_window.recording_stop_btn.clicked.connect(self.on_recording_stop_click)
+
+        # Plot axis dropdowns
+        for ch in self.main_window.plots:
+            self.main_window.plot_x_combos[ch].currentIndexChanged.connect(
+                lambda _idx, c=ch: self._on_axis_changed(c))
+            self.main_window.plot_y_combos[ch].currentIndexChanged.connect(
+                lambda _idx, c=ch: self._on_axis_changed(c))
 
     # =-= Model Signal Connections =-=
     def _connect_model_signals(self):
@@ -65,6 +73,7 @@ class ButtonController(QObject):
         self.playback_manager.error_occurred.connect(self.on_playback_error)
         self.playback_manager.state_changed.connect(self.on_playback_state_changed)
         self.playback_manager.playback_finished.connect(self.on_playback_finished)
+        self.playback_manager.tick_updated.connect(self._on_playback_tick)
     
         # Serial Manager signals
         self.serial_manager.connected.connect(self.on_serial_connected)
@@ -231,13 +240,16 @@ class ButtonController(QObject):
 
         self.state_manager.set_playback_mode()
 
-        # Disconnect data signal during bulk load to avoid per-row plot updates
+        # Disconnect plot-update signal during bulk load to avoid per-row overhead.
+        # Also disconnect batch signal so RecordingManager doesn't capture replayed data.
         self.data_store.data_added.disconnect(self.on_data_received)
+        self.data_store.data_batch_added.disconnect(self.recording_manager._on_batch_received)
         self.data_store.clear()
         try:
             success = self.playback_manager.bulk_load()
         finally:
             self.data_store.data_added.connect(self.on_data_received)
+            self.data_store.data_batch_added.connect(self.recording_manager._on_batch_received)
 
         if success:
             self._bulk_plot_all()
@@ -249,6 +261,15 @@ class ButtonController(QObject):
         self.playback_manager.stop()
         self._update_console("Playback stopped")
     
+    def on_playback_speed_changed(self, text: str):
+        """Handle speed combo box selection."""
+        try:
+            multiplier = float(text.replace('x', ''))
+            self.playback_manager.set_speed(multiplier)
+            self._update_console(f"Playback speed: {text}")
+        except ValueError:
+            pass
+
     # =-= Recording Handlers =-=
 
     def on_recording_browse_click(self):
@@ -297,9 +318,8 @@ class ButtonController(QObject):
 
     # =-= Model Signal Handlers =-=
     def on_data_received(self, row: dict):
-        # Called evert time added row to data_store, whether from serial or playback
+        # Called every time a row is added to data_store, whether from serial or playback
         self._update_plots(row)
-        self._update_stats()
     
     def on_data_cleared(self):
         self._clear_plots()
@@ -398,28 +418,70 @@ class ButtonController(QObject):
             self.main_window.serial_port_combo.setEnabled(True)
             self.main_window.serial_baud_combo.setEnabled(True)
     
+    # =-= Axis Helpers =-=
 
-    
+    def _row_value(self, row: dict, key: str, index: int = None):
+        if key == 'time':
+            v = row.get('timestamp', row.get('sample_time', None))
+            if v is not None:
+                return v
+            return index if index is not None else 0
+        return row.get(key)
+
+    def _on_axis_changed(self, channel_name: str):
+        self.main_window.update_plot_labels(channel_name)
+        all_rows = self.data_store.get_all()
+        if not all_rows:
+            return
+
+        x_key, y_key = self.main_window.get_axis_keys(channel_name)
+        x_vals = []
+        y_vals = []
+        for i, row in enumerate(all_rows):
+            xv = self._row_value(row, x_key, index=i)
+            yv = self._row_value(row, y_key, index=i)
+            if xv is not None and yv is not None:
+                x_vals.append(xv)
+                y_vals.append(yv)
+
+        self.main_window.plot_data[channel_name]['x'] = x_vals
+        self.main_window.plot_data[channel_name]['y'] = y_vals
+        self.main_window.plot_curves[channel_name].setData(x_vals, y_vals)
+
     def _update_plots(self, row: dict):
-        """Update plots with new data from data_store."""
-        # Map parsed mDLP data keys to plot channels
-        channel_mapping = {
-            'Channel 1': 'dac_v',
-            'Channel 2': 'integrator_v',
-            'Channel 3': 'adc_a_current',
-            'Channel 4': 'adc_b_current',
-            'Channel 5': 'diff_v',
-            'Channel 6': 'diff_i',
-        }
-        
-        # Use real capture timestamp for x-axis (Kingst time or serial receive time)
-        x_value = row.get('timestamp', row.get('sample_time', self.data_store.total_received()))
-        
-        # Update each plot with corresponding data
-        for channel_name, data_key in channel_mapping.items():
-            if data_key in row:
-                y_value = row[data_key]
+        """Update plots with new data from data_store (used by serial streaming)."""
+        for channel_name in self.main_window.plots:
+            x_key, y_key = self.main_window.get_axis_keys(channel_name)
+            x_value = self._row_value(row, x_key)
+            y_value = self._row_value(row, y_key)
+            if x_value is not None and y_value is not None:
                 self.main_window.update_plot(channel_name, x_value, y_value)
+    
+    def _on_playback_tick(self):
+        """Refresh plots once per playback timer tick from the store's last 1000 rows."""
+        recent = self.data_store.get_latest(1000)
+        if not recent:
+            return
+
+        # Compute starting index offset for time fallback
+        total = self.data_store.size()
+        start_idx = max(0, total - len(recent))
+
+        for channel_name in self.main_window.plots:
+            x_key, y_key = self.main_window.get_axis_keys(channel_name)
+            x_vals = []
+            y_vals = []
+            for i, row in enumerate(recent):
+                xv = self._row_value(row, x_key, index=start_idx + i)
+                yv = self._row_value(row, y_key, index=start_idx + i)
+                if xv is not None and yv is not None:
+                    x_vals.append(xv)
+                    y_vals.append(yv)
+            self.main_window.plot_data[channel_name]['x'] = x_vals
+            self.main_window.plot_data[channel_name]['y'] = y_vals
+            self.main_window.plot_curves[channel_name].setData(x_vals, y_vals)
+
+        self._update_stats()
     
     def _bulk_plot_all(self):
         """Plot all data in data_store at once using efficient batch rendering."""
@@ -428,22 +490,18 @@ class ButtonController(QObject):
         if not all_rows:
             return
 
-        channel_mapping = {
-            'Channel 1': 'dac_v',
-            'Channel 2': 'integrator_v',
-            'Channel 3': 'adc_a_current',
-            'Channel 4': 'adc_b_current',
-            'Channel 5': 'diff_v',
-            'Channel 6': 'diff_i',
-        }
-
-        # Build x-values list once — use real capture timestamp for x-axis
-        x_all = [row.get('timestamp', row.get('sample_time', 0)) for row in all_rows]
-
-        for channel_name, data_key in channel_mapping.items():
-            y_all = [row.get(data_key, 0) for row in all_rows if data_key in row]
-            if y_all:
-                self.main_window.plot_data[channel_name]['x'] = list(x_all)
+        for channel_name in self.main_window.plots:
+            x_key, y_key = self.main_window.get_axis_keys(channel_name)
+            x_all = []
+            y_all = []
+            for i, row in enumerate(all_rows):
+                xv = self._row_value(row, x_key, index=i)
+                yv = self._row_value(row, y_key, index=i)
+                if xv is not None and yv is not None:
+                    x_all.append(xv)
+                    y_all.append(yv)
+            if x_all:
+                self.main_window.plot_data[channel_name]['x'] = x_all
                 self.main_window.plot_data[channel_name]['y'] = y_all
                 self.main_window.plot_curves[channel_name].setData(x_all, y_all)
 
@@ -455,8 +513,8 @@ class ButtonController(QObject):
         recording_info = self.recording_manager.get_info()
         
         if recording_info['is_recording']:
-            status_text = f"Data: {stats['current_size']} | Recording: {recording_info['packet_count']}"
+            status_text = f"Data: {stats['current_size']} | Rec: {recording_info['packet_count']}"
         else:
             status_text = f"Data Points: {stats['current_size']}"
         
-        self.main_window.status3.setText(status_text)
+        self.main_window.stats_label.setText(status_text)

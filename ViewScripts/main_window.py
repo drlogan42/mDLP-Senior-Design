@@ -188,7 +188,7 @@ class MainWindow(QMainWindow):
         playback_panel.setStyleSheet("background-color: #e0e0e0;")
         playback_panel_layout.setSpacing(10)
         playback_panel.setFixedWidth(300)
-        playback_panel.setFixedHeight(100)
+        playback_panel.setFixedHeight(135)
 
             # Playback text
         playback_panel_layout.addWidget(QLabel("Playback File:"), 0, 0)
@@ -201,16 +201,24 @@ class MainWindow(QMainWindow):
         self.playback_browse_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
         playback_panel_layout.addWidget(self.playback_browse_btn, 0, 2)
 
+            # Speed selection
+        playback_panel_layout.addWidget(QLabel("Speed:"), 1, 0)
+        self.playback_speed_combo = QComboBox()
+        self.playback_speed_combo.addItems(['0.1x', '0.25x', '0.5x', '1.0x', '2.0x', '5.0x', '10.0x'])
+        self.playback_speed_combo.setCurrentText('1.0x')
+        self.playback_speed_combo.setStyleSheet("background-color: white; color: #333; padding: 2px;")
+        playback_panel_layout.addWidget(self.playback_speed_combo, 1, 1)
+
             # Play, Bulk Plot & Stop
         self.playback_play_btn = QPushButton("Play")
         self.playback_play_btn.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold;")
-        playback_panel_layout.addWidget(self.playback_play_btn, 1, 0)
+        playback_panel_layout.addWidget(self.playback_play_btn, 2, 0)
         self.playback_bulk_btn = QPushButton("Bulk Plot")
         self.playback_bulk_btn.setStyleSheet("background-color: #FF9800; color: white; font-weight: bold;")
-        playback_panel_layout.addWidget(self.playback_bulk_btn, 1, 1)
+        playback_panel_layout.addWidget(self.playback_bulk_btn, 2, 1)
         self.playback_stop_btn = QPushButton("Stop")
         self.playback_stop_btn.setStyleSheet("background-color: #FF6B6B; color: white; font-weight: bold;")
-        playback_panel_layout.addWidget(self.playback_stop_btn, 1, 2)
+        playback_panel_layout.addWidget(self.playback_stop_btn, 2, 2)
 
             # add to layout
         left_layout.addWidget(playback_panel)
@@ -271,7 +279,7 @@ class MainWindow(QMainWindow):
         bottom_layout.setContentsMargins(0, 0, 0, 0)
         bottom_layout.setSpacing(10)
         bottom_panel.setFixedWidth(300)
-        bottom_panel.setFixedHeight(120)
+        bottom_panel.setFixedHeight(155)
 
             # Mode status
         self.status1 = QLabel("Mode : Streaming")
@@ -290,6 +298,12 @@ class MainWindow(QMainWindow):
         self.status3.setStyleSheet("background-color: #4CAF50; color: white; padding: 10px; font-weight: bold;")
         self.status3.setAlignment(Qt.AlignmentFlag.AlignCenter)
         bottom_layout.addWidget(self.status3)
+
+            # Data stats (separate from status3 so error messages aren't overwritten)
+        self.stats_label = QLabel("Data Points: 0")
+        self.stats_label.setStyleSheet("background-color: #607D8B; color: white; padding: 5px; font-size: 11px;")
+        self.stats_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        bottom_layout.addWidget(self.stats_label)
 
             # add to layout
         left_layout.addWidget(bottom_panel)
@@ -327,25 +341,78 @@ class MainWindow(QMainWindow):
         self.plot_data = {}
         self.plot_colors = {}
         self.plot_curves = {}
+        self.plot_x_combos = {}
+        self.plot_y_combos = {}
+
+        # Axis options available in dropdowns
+        self.axis_options = [
+            ('Time',           'time'),
+            ('DAC Voltage',    'dac_v'),
+            ('Integrator V',   'integrator_v'),
+            ('ADC A Current',  'adc_a_current'),
+            ('ADC B Current',  'adc_b_current'),
+            ('Diff Voltage',   'diff_v'),
+            ('Diff Current',   'diff_i'),
+        ]
+        self._axis_display_names = [name for name, _ in self.axis_options]
+        self._axis_keys = [key for _, key in self.axis_options]
         
-        # Channel config: (internal_name, display_title, y_label, y_units, pen_color)
+        # Channel config: (internal_name, display_title, default_y_index, pen_color)
+        #   default_y_index refers to self.axis_options index
         channel_config = [
-            ('Channel 1', 'DAC Voltage',         'Voltage',  'V',  '#2196F3'),
-            ('Channel 2', 'Integrator Voltage',   'Voltage',  'V',  '#4CAF50'),
-            ('Channel 3', 'ADC A Current',        'Current',  'A',  '#FF9800'),
-            ('Channel 4', 'ADC B Current',        'Current',  'A',  '#F44336'),
-            ('Channel 5', 'Differential Voltage', 'Voltage',  'V',  '#9C27B0'),
-            ('Channel 6', 'Differential Current', 'Current',  'A',  '#00BCD4'),
+            ('Channel 1', 'DAC Voltage',         1, '#2196F3'),
+            ('Channel 2', 'Integrator Voltage',   2, '#4CAF50'),
+            ('Channel 3', 'ADC A Current',        3, '#FF9800'),
+            ('Channel 4', 'ADC B Current',        4, '#F44336'),
+            ('Channel 5', 'Differential Voltage', 5, '#9C27B0'),
+            ('Channel 6', 'Differential Current', 6, '#00BCD4'),
         ]
         
-        for i, (channel, title, y_label, y_units, color) in enumerate(channel_config):
-            row = i // 2
-            col = i % 2
-            
+        for i, (channel, title, default_y_idx, color) in enumerate(channel_config):
+            grid_row = i // 2
+            grid_col = i % 2
+
+            # Container for dropdown row + plot
+            cell_widget = QWidget()
+            cell_layout = QVBoxLayout(cell_widget)
+            cell_layout.setContentsMargins(0, 0, 0, 0)
+            cell_layout.setSpacing(2)
+
+            # Axis selector row
+            selector_row = QHBoxLayout()
+            selector_row.setSpacing(4)
+
+            x_label = QLabel("X:")
+            x_label.setStyleSheet("font-size: 10px; color: #333;")
+            x_combo = QComboBox()
+            x_combo.addItems(self._axis_display_names)
+            x_combo.setCurrentIndex(0)  # Default: Time
+            x_combo.setStyleSheet("background-color: white; color: #333; padding: 1px; font-size: 10px;")
+            x_combo.setFixedHeight(22)
+
+            y_label = QLabel("Y:")
+            y_label.setStyleSheet("font-size: 10px; color: #333;")
+            y_combo = QComboBox()
+            y_combo.addItems(self._axis_display_names)
+            y_combo.setCurrentIndex(default_y_idx)
+            y_combo.setStyleSheet("background-color: white; color: #333; padding: 1px; font-size: 10px;")
+            y_combo.setFixedHeight(22)
+
+            selector_row.addWidget(x_label)
+            selector_row.addWidget(x_combo)
+            selector_row.addWidget(y_label)
+            selector_row.addWidget(y_combo)
+            selector_row.addStretch()
+            cell_layout.addLayout(selector_row)
+
+            self.plot_x_combos[channel] = x_combo
+            self.plot_y_combos[channel] = y_combo
+
+            # Plot widget
             plot_widget = pg.PlotWidget(title=title)
             plot_widget.setBackground('white')
             
-            plot_widget.setLabel('left', y_label, units=y_units, color='black', size='10pt')
+            plot_widget.setLabel('left', self._axis_display_names[default_y_idx], color='black', size='10pt')
             plot_widget.setLabel('bottom', 'Time', units='s', color='black', size='10pt')
             plot_widget.showGrid(x=True, y=True, alpha=0.3)
             
@@ -358,13 +425,14 @@ class MainWindow(QMainWindow):
             ax.setTextPen(color='black')
             
             plot_widget.plotItem.setTitle(title, color='black', size='12pt')
+            cell_layout.addWidget(plot_widget)
             
             self.plots[channel] = plot_widget
             self.plot_data[channel] = {'x': [], 'y': []}
             self.plot_colors[channel] = color
             self.plot_curves[channel] = plot_widget.plot(pen=pg.mkPen(color, width=1))
             
-            plot_layout.addWidget(plot_widget, row, col)
+            plot_layout.addWidget(cell_widget, grid_row, grid_col)
 
 
         # add to container layout
@@ -381,8 +449,8 @@ class MainWindow(QMainWindow):
         self.plot_data[channel_name]['x'].append(x_value)
         self.plot_data[channel_name]['y'].append(y_value)
         
-        # Rolling window — large enough for full file playback
-        max_pts = 50000
+        # Rolling window for live playback performance
+        max_pts = 1000
         if len(self.plot_data[channel_name]['x']) > max_pts:
             self.plot_data[channel_name]['x'] = self.plot_data[channel_name]['x'][-max_pts:]
             self.plot_data[channel_name]['y'] = self.plot_data[channel_name]['y'][-max_pts:]
@@ -392,6 +460,19 @@ class MainWindow(QMainWindow):
             self.plot_data[channel_name]['y']
         )
     
+    def get_axis_keys(self, channel_name):
+        """Return (x_data_key, y_data_key) for the given channel based on dropdown selections."""
+        x_idx = self.plot_x_combos[channel_name].currentIndex()
+        y_idx = self.plot_y_combos[channel_name].currentIndex()
+        return self._axis_keys[x_idx], self._axis_keys[y_idx]
+
+    def update_plot_labels(self, channel_name):
+        """Update axis labels to match current dropdown selections."""
+        x_name = self.plot_x_combos[channel_name].currentText()
+        y_name = self.plot_y_combos[channel_name].currentText()
+        self.plots[channel_name].setLabel('bottom', x_name, color='black', size='10pt')
+        self.plots[channel_name].setLabel('left', y_name, color='black', size='10pt')
+
     def clear_plots(self):
         """Clear all plot data and reset curves."""
         for channel in self.plots:

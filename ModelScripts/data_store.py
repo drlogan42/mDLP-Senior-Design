@@ -11,6 +11,7 @@ class DataStore(QObject):
     # DataStore is thread-safe central data buffer
 
     data_added = pyqtSignal(dict) 
+    data_batch_added = pyqtSignal(list)
     data_cleared = pyqtSignal()   
 
     def __init__(self, max_size: int = 10000):
@@ -32,7 +33,17 @@ class DataStore(QObject):
             self._buffer.append(row)
             self._total_received += 1
         self.data_added.emit(row)
-    
+
+    def add_silent(self, rows: list) -> None:
+        """Add multiple rows in batch. Emits data_batch_added instead of per-row data_added."""
+        if not rows:
+            return
+        with self._lock:
+            for row in rows:
+                self._buffer.append(row)
+                self._total_received += 1
+        self.data_batch_added.emit(rows)
+
     # Dont know if i want to keep this if i want to read from a file as if serial
     def add_bulk(self, rows: list, unlimited: bool = False) -> None:
 

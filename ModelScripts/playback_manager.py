@@ -2,7 +2,7 @@
 PlaybackManager loads CSV files and feeds rows to data_store on a timer to emulate serial data input for playback mode.
 '''
 
-from PyQt6.QtCore import QObject, QTimer, pyqtSignal
+from PyQt6.QtCore import QObject, QTimer, pyqtSignal, QElapsedTimer
 import csv
 from pathlib import Path
 from ModelScripts.mdlp_parser import MDLPParser, is_raw_mdlp_format
@@ -13,6 +13,10 @@ class PlaybackManager(QObject):
     playback_finished = pyqtSignal()
     error_occurred = pyqtSignal(str)
     state_changed = pyqtSignal(str)
+    tick_updated = pyqtSignal()  # emitted once per timer tick after batch add
+
+    # Timer tick interval in ms — controls UI responsiveness vs CPU load
+    _TICK_INTERVAL_MS = 16  # ~60 fps
 
     def __init__(self, data_store, playback_rate_ms: int = 100):
         super().__init__()
@@ -26,8 +30,17 @@ class PlaybackManager(QObject):
         self._file_path = None
         self._is_raw_format = False
 
-        # Timer for row-by-row emission
+        # Speed multiplier (1.0 = real-time)
+        self._speed_multiplier = 1.0
+
+        # Wall-clock timer for real-time playback
+        self._elapsed = QElapsedTimer()
+        self._playback_time_offset = 0.0  # data-time at which playback started
+        self._wall_start_ms = 0  # elapsed ms when playback started/resumed
+
+        # Timer for tick-driven emission
         self._timer = QTimer()
+        self._timer.setInterval(self._TICK_INTERVAL_MS)
         self._timer.timeout.connect(self._on_timer_tick)
 
         self._set_state("idle")
@@ -151,13 +164,16 @@ class PlaybackManager(QObject):
         if self._is_playing:
             return  # Already playing
     
-        # Wont want this in final product but testing with looping playback for now
         if self._current_index >= len(self._loaded_rows):
-            # At end, restart from beginning
             self._current_index = 0
 
+        # Record the data-time origin for this playback session
+        self._playback_time_offset = self._get_row_time(self._current_index)
+        self._elapsed.start()
+        self._wall_start_ms = 0
+
         self._is_playing = True
-        self._timer.start(self._playback_rate_ms)
+        self._timer.start(self._TICK_INTERVAL_MS)
         self._set_state("playing")
     
     def stop(self) -> None:
@@ -176,9 +192,13 @@ class PlaybackManager(QObject):
             self._is_playing = False
             self._set_state("paused")
     
+    def _get_row_time(self, index: int) -> float:
+        """Extract the timestamp from a loaded row for scheduling."""
+        row = self._loaded_rows[index]
+        return row.get('timestamp', row.get('sample_time', row.get('Elapsed_Time_s', index * 0.001)))
+
     def _on_timer_tick(self) -> None:
         if self._current_index >= len(self._loaded_rows):
-            # Reached end of file
             self._timer.stop()
             self._is_playing = False
             self._current_index = 0
@@ -186,12 +206,25 @@ class PlaybackManager(QObject):
             self.playback_finished.emit()
             return
 
-        # Get current row and send to data_store
-        current_row = self._loaded_rows[self._current_index]
-        self._data_store.add(current_row)
+        # How much data-time has elapsed at current speed
+        wall_elapsed_s = self._elapsed.elapsed() / 1000.0
+        data_elapsed = wall_elapsed_s * self._speed_multiplier
+        target_time = self._playback_time_offset + data_elapsed
 
-        # Advance to next row
-        self._current_index += 1
+        # Collect all rows whose timestamp <= target_time
+        batch = []
+        while self._current_index < len(self._loaded_rows):
+            row_time = self._get_row_time(self._current_index)
+            if row_time > target_time:
+                break
+            batch.append(self._loaded_rows[self._current_index])
+            self._current_index += 1
+            if len(batch) >= 500:
+                break
+
+        if batch:
+            self._data_store.add_silent(batch)
+            self.tick_updated.emit()
 
     # =-= State Management =-=
 
@@ -220,8 +253,23 @@ class PlaybackManager(QObject):
             'format': 'raw_mdlp' if self._is_raw_format else 'parsed_csv'
         }
 
+    def set_speed(self, multiplier: float) -> None:
+        """Set playback speed multiplier. 1.0 = real-time, 2.0 = double speed, etc."""
+        if multiplier <= 0:
+            return
+        # If playing, adjust the time origin so the switch is seamless
+        if self._is_playing and self._current_index < len(self._loaded_rows):
+            current_data_time = self._get_row_time(self._current_index)
+            self._playback_time_offset = current_data_time
+            self._elapsed.restart()
+        self._speed_multiplier = multiplier
+
+    def get_speed(self) -> float:
+        """Get current playback speed multiplier."""
+        return self._speed_multiplier
+
     def set_playback_rate(self, rate_ms: int) -> None:
-        self._playback_rate_ms = max(10, rate_ms)  # Prevent too-fast rates
+        self._playback_rate_ms = max(10, rate_ms)
         if self._is_playing:
             self._timer.setInterval(self._playback_rate_ms)
 
