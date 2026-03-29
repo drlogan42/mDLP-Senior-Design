@@ -115,6 +115,9 @@ class SerialManager(QObject):
 
         # State
         self._is_connected = False
+        
+        # Timing: track connection start time for relative timestamps
+        self._connection_start_time = None
     
     # Port Discovery
 
@@ -188,6 +191,7 @@ class SerialManager(QObject):
             self._reader_thread.start()
 
             self._is_connected = True
+            self._connection_start_time = time.time()  # Record connection start for relative timestamps
             self.connected.emit(port_name)
             return True
 
@@ -230,13 +234,27 @@ class SerialManager(QObject):
         self._reader = None
         self._reader_thread = None
         self._is_connected = False
+        self._connection_start_time = None
 
     # =-= Data Flow =-=
 
     def _on_data_received(self, data: bytes, timestamp: float):
-        """Feed received bytes into parser in batch (runs on main thread via signal)."""
-        for byte_val in data:
-            self._parser.feed_byte(byte_val, timestamp)
+        """Feed received bytes into parser with relative timestamps and synthetic inter-byte timing."""
+        if not self._connection_start_time:
+            return
+            
+        # Convert absolute timestamp to relative seconds since connection
+        relative_timestamp = timestamp - self._connection_start_time
+        
+        # Calculate inter-byte interval based on baud rate for smoother playback
+        # At baud rate: ~(10 bits per byte including start/stop bits)
+        byte_interval = 10.0 / self._baud_rate  # seconds per byte
+        
+        feed = self._parser.feed_byte
+        for i, byte_val in enumerate(data):
+            # Give each byte a synthetic timestamp for smoother playback
+            synthetic_time = relative_timestamp + (i * byte_interval)
+            feed(byte_val, synthetic_time)
 
     def _on_packet_ready(self, row: dict):
         """Parser produced a complete data packet — send to data store."""

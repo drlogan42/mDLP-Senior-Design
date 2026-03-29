@@ -25,7 +25,7 @@ if __name__ == "__main__":
     try:
         # Create Model Layer
         state_manager = StateManager()
-        data_store = DataStore(max_size=10000)
+        data_store = DataStore(max_size=25000)  # Larger buffer for high-rate data
         playback_manager = PlaybackManager(data_store, playback_rate_ms=100)
         serial_manager = SerialManager(data_store)
         recording_manager = RecordingManager(data_store)

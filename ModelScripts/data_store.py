@@ -2,7 +2,7 @@
 data_store.py is central data buffer for all incoming data
 
 '''
-from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal, QTimer
 from collections import deque
 from typing import Optional
 import threading
@@ -10,9 +10,12 @@ import threading
 class DataStore(QObject):
     # DataStore is thread-safe central data buffer
 
-    data_added = pyqtSignal(dict) 
-    data_batch_added = pyqtSignal(list)
+    data_added = pyqtSignal(dict)          # single row (legacy, used by bulk_load)
+    data_batch_added = pyqtSignal(list)    # list of rows
     data_cleared = pyqtSignal()   
+
+    # Batch emit interval — balances latency vs throughput
+    _BATCH_INTERVAL_MS = 16  # 60 Hz batch emission for better responsiveness
 
     def __init__(self, max_size: int = 10000):
         super().__init__()
@@ -20,22 +23,42 @@ class DataStore(QObject):
         self._buffer = deque(maxlen=max_size)
         self._lock = threading.Lock()
         self._total_received = 0
+
+        # Pending rows waiting to be emitted as a batch
+        self._pending_batch = []
+        self._pending_lock = threading.Lock()
+
+        # Timer to flush pending batch to signal consumers
+        self._batch_timer = QTimer()
+        self._batch_timer.setInterval(self._BATCH_INTERVAL_MS)
+        self._batch_timer.timeout.connect(self._flush_batch)
+        self._batch_timer.start()
     
     # =-= Add Data =-=
 
     def add(self, row: dict) -> None:
-        # Add single data row to buffer
+        """Add single data row to buffer.
         
-        # Called by playback_manager and serial_manager
-        # Emits data_added signal so controller can update UI 
-
+        Row is stored immediately but signal emission is batched
+        via _flush_batch timer for performance at high data rates.
+        """
         with self._lock:
             self._buffer.append(row)
             self._total_received += 1
-        self.data_added.emit(row)
+        with self._pending_lock:
+            self._pending_batch.append(row)
+
+    def _flush_batch(self):
+        """Emit accumulated rows as a single batch signal (called by timer)."""
+        with self._pending_lock:
+            if not self._pending_batch:
+                return
+            batch = self._pending_batch
+            self._pending_batch = []
+        self.data_batch_added.emit(batch)
 
     def add_silent(self, rows: list) -> None:
-        """Add multiple rows in batch. Emits data_batch_added instead of per-row data_added."""
+        """Add multiple rows in batch. Emits data_batch_added directly."""
         if not rows:
             return
         with self._lock:

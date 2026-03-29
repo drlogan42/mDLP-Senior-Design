@@ -65,8 +65,8 @@ class ButtonController(QObject):
     def _connect_model_signals(self):
         """Connect Model signals to UI update methods."""
         
-        # Data Store signals
-        self.data_store.data_added.connect(self.on_data_received)
+        # Data Store signals — use batch signal for all data flow
+        self.data_store.data_batch_added.connect(self.on_data_batch_received)
         self.data_store.data_cleared.connect(self.on_data_cleared)
         
         # Playback Manager signals
@@ -240,15 +240,14 @@ class ButtonController(QObject):
 
         self.state_manager.set_playback_mode()
 
-        # Disconnect plot-update signal during bulk load to avoid per-row overhead.
-        # Also disconnect batch signal so RecordingManager doesn't capture replayed data.
-        self.data_store.data_added.disconnect(self.on_data_received)
+        # Disconnect batch signals during bulk load to avoid per-batch overhead
+        self.data_store.data_batch_added.disconnect(self.on_data_batch_received)
         self.data_store.data_batch_added.disconnect(self.recording_manager._on_batch_received)
         self.data_store.clear()
         try:
             success = self.playback_manager.bulk_load()
         finally:
-            self.data_store.data_added.connect(self.on_data_received)
+            self.data_store.data_batch_added.connect(self.on_data_batch_received)
             self.data_store.data_batch_added.connect(self.recording_manager._on_batch_received)
 
         if success:
@@ -317,9 +316,10 @@ class ButtonController(QObject):
         self._update_console(f"Recording: {state}")
 
     # =-= Model Signal Handlers =-=
-    def on_data_received(self, row: dict):
-        # Called every time a row is added to data_store, whether from serial or playback
-        self._update_plots(row)
+    def on_data_batch_received(self, rows: list):
+        """Handle a batch of rows from data_store (serial or playback)."""
+        self._update_plots_batch(rows)
+        self._update_stats()
     
     def on_data_cleared(self):
         self._clear_plots()
@@ -444,18 +444,21 @@ class ButtonController(QObject):
                 x_vals.append(xv)
                 y_vals.append(yv)
 
-        self.main_window.plot_data[channel_name]['x'] = x_vals
-        self.main_window.plot_data[channel_name]['y'] = y_vals
-        self.main_window.plot_curves[channel_name].setData(x_vals, y_vals)
+        self.main_window.set_plot_data(channel_name, x_vals, y_vals)
+        self.main_window.flush_plots()
+        
+        # Recalculate axis ranges for updated data
+        self.main_window.reset_axis_ranges()
 
-    def _update_plots(self, row: dict):
-        """Update plots with new data from data_store (used by serial streaming)."""
-        for channel_name in self.main_window.plots:
-            x_key, y_key = self.main_window.get_axis_keys(channel_name)
-            x_value = self._row_value(row, x_key)
-            y_value = self._row_value(row, y_key)
-            if x_value is not None and y_value is not None:
-                self.main_window.update_plot(channel_name, x_value, y_value)
+    def _update_plots_batch(self, rows: list):
+        """Update plots with batch of rows from data_store (used by serial streaming)."""
+        for row in rows:
+            for channel_name in self.main_window.plots:
+                x_key, y_key = self.main_window.get_axis_keys(channel_name)
+                x_value = self._row_value(row, x_key)
+                y_value = self._row_value(row, y_key)
+                if x_value is not None and y_value is not None:
+                    self.main_window.update_plot(channel_name, x_value, y_value)
     
     def _on_playback_tick(self):
         """Refresh plots once per playback timer tick from the store's last 1000 rows."""
@@ -477,10 +480,9 @@ class ButtonController(QObject):
                 if xv is not None and yv is not None:
                     x_vals.append(xv)
                     y_vals.append(yv)
-            self.main_window.plot_data[channel_name]['x'] = x_vals
-            self.main_window.plot_data[channel_name]['y'] = y_vals
-            self.main_window.plot_curves[channel_name].setData(x_vals, y_vals)
+            self.main_window.set_plot_data(channel_name, x_vals, y_vals)
 
+        self.main_window.flush_plots()
         self._update_stats()
     
     def _bulk_plot_all(self):
@@ -501,9 +503,11 @@ class ButtonController(QObject):
                     x_all.append(xv)
                     y_all.append(yv)
             if x_all:
-                self.main_window.plot_data[channel_name]['x'] = x_all
-                self.main_window.plot_data[channel_name]['y'] = y_all
-                self.main_window.plot_curves[channel_name].setData(x_all, y_all)
+                self.main_window.set_plot_data(channel_name, x_all, y_all)
+
+        self.main_window.flush_plots()
+        # Recalculate axis ranges for new bulk data
+        self.main_window.reset_axis_ranges()
 
     def _clear_plots(self):
         self.main_window.clear_plots()
