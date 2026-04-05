@@ -69,6 +69,22 @@ class PlotRingBuffer:
         return (np.concatenate((self._x[self._head:], self._x[:self._head])),
                 np.concatenate((self._y[self._head:], self._y[:self._head])))
 
+    def resize(self, new_max_size: int):
+        """Resize the buffer, preserving existing data up to new capacity."""
+        if new_max_size == self.max_size:
+            return
+        x_old, y_old = self.get_ordered()
+        keep = min(len(x_old), new_max_size)
+        self.max_size = new_max_size
+        self._x = np.zeros(new_max_size, dtype=np.float64)
+        self._y = np.zeros(new_max_size, dtype=np.float64)
+        if keep > 0:
+            self._x[:keep] = x_old[-keep:]
+            self._y[:keep] = y_old[-keep:]
+        self._head = keep % new_max_size
+        self._count = keep
+        self.dirty = True
+
     def clear(self):
         self._head = 0
         self._count = 0
@@ -500,7 +516,7 @@ class MainWindow(QMainWindow):
             
             plot_widget.setLabel('left', self._axis_display_names[default_y_idx], color='black', size='10pt')
             plot_widget.setLabel('bottom', 'Time', units='s', color='black', size='10pt')
-            plot_widget.showGrid(x=True, y=True, alpha=0.3)
+            plot_widget.showGrid(x=True, y=True, alpha=0.5)
             
             ax = plot_widget.getAxis('left')
             ax.setPen(color='black', width=1)
@@ -525,7 +541,7 @@ class MainWindow(QMainWindow):
             self.plots[channel] = plot_widget
             self.plot_data[channel] = PlotRingBuffer(max_size=5000)
             self.plot_colors[channel] = color
-            self.plot_curves[channel] = plot_widget.plot(pen=pg.mkPen(color, width=1))
+            self.plot_curves[channel] = plot_widget.plot(pen=pg.mkPen(color, width=2))
             
             plot_layout.addWidget(cell_widget, grid_row, grid_col)
 
@@ -548,6 +564,9 @@ class MainWindow(QMainWindow):
         if channel_name not in self.plot_data:
             return
         buf = self.plot_data[channel_name]
+        n = len(x_arr)
+        if n > buf.max_size:
+            buf.resize(n)
         buf.clear()
         buf.append_bulk(np.asarray(x_arr, dtype=np.float64),
                         np.asarray(y_arr, dtype=np.float64))
@@ -595,12 +614,15 @@ class MainWindow(QMainWindow):
         
         # Handle X axis
         if x_key == 'time':
-            # For time axis, show only current data range with small padding
+            # Show a ~2s trailing window (matches live streaming scale)
             x_data, _ = self.plot_data[channel].get_ordered()
             if len(x_data) > 0:
-                x_min, x_max = np.min(x_data), np.max(x_data)
-                x_padding = (x_max - x_min) * 0.02  # 2% padding
-                plot.setXRange(x_min - x_padding, x_max + x_padding, padding=0)
+                x_max = np.max(x_data)
+                x_min_data = np.min(x_data)
+                window = 2.0  # seconds visible at a time
+                x_start = max(x_min_data, x_max - window)
+                x_padding = window * 0.02
+                plot.setXRange(x_start - x_padding, x_max + x_padding, padding=0)
         else:
             # For non-time axes, use global range with padding
             if x_key in self._axis_ranges:
