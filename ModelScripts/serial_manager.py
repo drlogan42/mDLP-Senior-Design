@@ -118,6 +118,7 @@ class SerialManager(QObject):
         
         # Timing: track connection start time for relative timestamps
         self._connection_start_time = None
+        self._last_byte_time = 0.0  # Track last assigned timestamp for monotonicity
     
     # Port Discovery
 
@@ -235,6 +236,7 @@ class SerialManager(QObject):
         self._reader_thread = None
         self._is_connected = False
         self._connection_start_time = None
+        self._last_byte_time = 0.0
 
     # =-= Data Flow =-=
 
@@ -250,11 +252,21 @@ class SerialManager(QObject):
         # At baud rate: ~(10 bits per byte including start/stop bits)
         byte_interval = 10.0 / self._baud_rate  # seconds per byte
         
+        # Ensure monotonicity: start from the later of the chunk's arrival time
+        # minus the chunk's transmission duration, or just after the last byte's time.
+        # This prevents backwards jumps when large chunks are read at once and the
+        # synthetic spread (N * byte_interval) exceeds the real time between reads.
+        n = len(data)
+        chunk_duration = (n - 1) * byte_interval
+        start_time = max(relative_timestamp - chunk_duration,
+                         self._last_byte_time + byte_interval)
+        
         feed = self._parser.feed_byte
         for i, byte_val in enumerate(data):
-            # Give each byte a synthetic timestamp for smoother playback
-            synthetic_time = relative_timestamp + (i * byte_interval)
+            synthetic_time = start_time + (i * byte_interval)
             feed(byte_val, synthetic_time)
+        
+        self._last_byte_time = start_time + chunk_duration
 
     def _on_packet_ready(self, row: dict):
         """Parser produced a complete data packet — send to data store."""

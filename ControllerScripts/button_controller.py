@@ -422,7 +422,7 @@ class ButtonController(QObject):
 
     def _row_value(self, row: dict, key: str, index: int = None):
         if key == 'time':
-            v = row.get('timestamp', row.get('sample_time', None))
+            v = row.get('sample_time', row.get('timestamp', None))
             if v is not None:
                 return v
             return index if index is not None else 0
