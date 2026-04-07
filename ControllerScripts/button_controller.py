@@ -422,7 +422,7 @@ class ButtonController(QObject):
 
     def _row_value(self, row: dict, key: str, index: int = None):
         if key == 'time':
-            v = row.get('sample_time', row.get('timestamp', None))
+            v = row.get('timestamp', row.get('sample_time', None))
             if v is not None:
                 return v
             return index if index is not None else 0
@@ -461,28 +461,7 @@ class ButtonController(QObject):
                     self.main_window.update_plot(channel_name, x_value, y_value)
     
     def _on_playback_tick(self):
-        """Refresh plots once per playback timer tick from the store's last 1000 rows."""
-        recent = self.data_store.get_latest(1000)
-        if not recent:
-            return
-
-        # Compute starting index offset for time fallback
-        total = self.data_store.size()
-        start_idx = max(0, total - len(recent))
-
-        for channel_name in self.main_window.plots:
-            x_key, y_key = self.main_window.get_axis_keys(channel_name)
-            x_vals = []
-            y_vals = []
-            for i, row in enumerate(recent):
-                xv = self._row_value(row, x_key, index=start_idx + i)
-                yv = self._row_value(row, y_key, index=start_idx + i)
-                if xv is not None and yv is not None:
-                    x_vals.append(xv)
-                    y_vals.append(yv)
-            self.main_window.set_plot_data(channel_name, x_vals, y_vals)
-
-        self.main_window.flush_plots()
+        """Update stats on each playback tick. Plot updates handled by on_data_batch_received."""
         self._update_stats()
     
     def _bulk_plot_all(self):
