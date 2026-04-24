@@ -373,13 +373,13 @@ class MainWindow(QMainWindow):
 
             # Mode status
         self.status1 = QLabel("Mode : Streaming")
-        self.status1.setStyleSheet("background-color: #FF6B6B; color: white; padding: 10px; font-weight: bold;")
+        self.status1.setStyleSheet("background-color: #2196F3; color: white; padding: 10px; font-weight: bold;")
         self.status1.setAlignment(Qt.AlignmentFlag.AlignCenter)
         bottom_layout.addWidget(self.status1)
 
             # Recording status
         self.status2 = QLabel("Recording: False")
-        self.status2.setStyleSheet("background-color: #2196F3; color: white; padding: 10px; font-weight: bold;")
+        self.status2.setStyleSheet("background-color: #FF6B6B; color: white; padding: 10px; font-weight: bold;")
         self.status2.setAlignment(Qt.AlignmentFlag.AlignCenter)
         bottom_layout.addWidget(self.status2)
 
