@@ -1,21 +1,16 @@
-'''
-data_store.py is central data buffer for all incoming data
+# data_store.py
+# The main data buffer which stores incoming data rows. Thread safe and emits signals when data added or cleared. Used by SerialManager to feed data to the app and by PlaybackManager for playback.
 
-'''
 from PyQt6.QtCore import QObject, pyqtSignal, QTimer
 from collections import deque
 from typing import Optional
 import threading
 
 class DataStore(QObject):
-    # DataStore is thread-safe central data buffer
-
-    data_added = pyqtSignal(dict)          # single row (legacy, used by bulk_load)
-    data_batch_added = pyqtSignal(list)    # list of rows
+    data_added = pyqtSignal(dict)      
+    data_batch_added = pyqtSignal(list)
     data_cleared = pyqtSignal()   
-
-    # Batch emit interval — balances latency vs throughput
-    _BATCH_INTERVAL_MS = 16  # 60 Hz batch emission for better responsiveness
+    _BATCH_INTERVAL_MS = 16  # 60 Hz batch emission
 
     def __init__(self, max_size: int = 10000):
         super().__init__()
@@ -35,21 +30,15 @@ class DataStore(QObject):
         self._batch_timer.start()
     
     # =-= Add Data =-=
-
     def add(self, row: dict) -> None:
-        """Add single data row to buffer.
-        
-        Row is stored immediately but signal emission is batched
-        via _flush_batch timer for performance at high data rates.
-        """
         with self._lock:
             self._buffer.append(row)
             self._total_received += 1
         with self._pending_lock:
             self._pending_batch.append(row)
 
+    # Flush pending batch to emit signal, called by timer
     def _flush_batch(self):
-        """Emit accumulated rows as a single batch signal (called by timer)."""
         with self._pending_lock:
             if not self._pending_batch:
                 return
@@ -57,8 +46,8 @@ class DataStore(QObject):
             self._pending_batch = []
         self.data_batch_added.emit(batch)
 
+    # Add multiple rows at once, used for file loading to bypass batch timer and emit all at once
     def add_silent(self, rows: list) -> None:
-        """Add multiple rows in batch. Emits data_batch_added directly."""
         if not rows:
             return
         with self._lock:
@@ -67,11 +56,8 @@ class DataStore(QObject):
                 self._total_received += 1
         self.data_batch_added.emit(rows)
 
-    # Dont know if i want to keep this if i want to read from a file as if serial
+    # 
     def add_bulk(self, rows: list, unlimited: bool = False) -> None:
-
-        # Add multiple rows at once without emitting per row for loading from file
-        # emit single data_added with last row to trigger 
         if not rows:
             return
 
@@ -89,28 +75,27 @@ class DataStore(QObject):
         self.data_added.emit(rows[-1])
     
     # =-= Retrieve Data =-=
-
+    # Get most recent n rows from buffer, n=1 default
     def get_latest(self, count: int = 1) -> list:
-        # Get most recent n rows from buffer, n=1 default
         with self._lock:
             if count >= len(self._buffer):
                 return list(self._buffer)
             return list(self._buffer)[-count:]
-        
+    
+    # Gets all rows in buffer, oldest first    
     def get_all(self) -> list:
-        # Gets all rows in buffer, oldest first
         with self._lock:
             return list(self._buffer)
-
+    
+    # Gets single row by buffer index, 0 oldest, -1 newest
     def get_at(self, index: int) -> Optional[dict]:
-        # Gets single row by buffer index, 0 oldest, -1 newest
         with self._lock:
             if 0 <= index < len(self._buffer):
                 return self._buffer[index].copy()
             return None
-    
+        
+    # Extract values for one channel across all rows, optionally limited to recent count
     def get_channel_data(self, channel_name: str, count: Optional[int] = None) -> list:
-        # Extract values for one channel across all rows, optionally limited to recent count
         with self._lock:
             if count is None:
                 source = list(self._buffer)
@@ -119,43 +104,42 @@ class DataStore(QObject):
 
         return [row[channel_name] for row in source if channel_name in row]
 
+    # Get column names from the most recent row.
     def get_channel_names(self) -> list:
-        # Get column names from the most recent row.
         with self._lock:
             if not self._buffer:
                 return []
             return list(self._buffer[-1].keys())
 
     # =-= Buffer Management =-=
+    # Empty the buffer, used by reset and clear, emit signal to reset plots
     def clear(self) -> None:
-        # Empty the buffer, used by reset and clear, emit signal to reset plots
         with self._lock:
             self._buffer.clear()
 
         self.data_cleared.emit()
 
+    # Current number of rows in the buffer
     def size(self) -> int:
-        # Current number of rows in the buffer
         with self._lock:
             return len(self._buffer)
-
+    
+    # Check if buffer has no data
     def is_empty(self) -> bool:
-        # Check if buffer has no data
         with self._lock:
             return len(self._buffer) == 0
 
+    # Total rows ever added, including those dropped by max_size truncation.
     def total_received(self) -> int:
-        # Total rows ever added, including those dropped by max_size truncation.
-        # Useful for tracking data loss.
         with self._lock:
             return self._total_received
 
     @property
+    # Maximum buffer capacity
     def max_size(self) -> int:
-        # Maximum buffer capacity
         return self._max_size
+    # Get information about current buffer status for display in UI
     def get_stats(self) -> dict:
-        # Get information about current buffer status for display in UI
         with self._lock:
             current = len(self._buffer)
             return {

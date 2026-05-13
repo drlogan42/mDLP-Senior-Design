@@ -1,12 +1,10 @@
 # main_app.py
+# Main app entry point for the GUI. It creates model, view, and controller instances and starts the Qt application loop.
 
-# Import from Library
+# Imports
 import sys
 import os
-
-# Fix Python path for imports
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-      
 from PyQt6.QtWidgets import QApplication
 
 # Import from local files
@@ -25,7 +23,7 @@ if __name__ == "__main__":
     try:
         # Create Model Layer
         state_manager = StateManager()
-        data_store = DataStore(max_size=25000)  # Larger buffer for high-rate data
+        data_store = DataStore(max_size=25000)                                  # Change buffer size as needed here
         playback_manager = PlaybackManager(data_store, playback_rate_ms=100)
         serial_manager = SerialManager(data_store)
         recording_manager = RecordingManager(data_store)

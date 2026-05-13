@@ -1,9 +1,7 @@
+# state_manager.py
+# Manages overall app state, including mode (streaming vs playback), recording status, console visibility, and connection status.
 class StateManager:
-    """
-    Tracks application-wide state: mode, console visibility, recording status.
-    """
     VALID_MODES = ("Streaming", "Playback")
-
     def __init__(self):
         self.mode = "Streaming"  # Streaming or Playback
         self.is_recording = False
@@ -29,7 +27,6 @@ class StateManager:
 
     # Reset
     def reset_program(self):
-        """Reset all state to defaults."""
         self.mode = "Streaming"
         self.is_recording = False
         self.console_visible = True

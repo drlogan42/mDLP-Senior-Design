@@ -1,21 +1,17 @@
-'''
-PlaybackManager loads CSV files and feeds rows to data_store on a timer to emulate serial data input for playback mode.
-'''
-
+# playback_manager.py
+# Manages playback of recorded CSV files. Loads files, parses them, and emits data to DataStore at scheduled intervals to simulate real-time streaming.
 from PyQt6.QtCore import QObject, QTimer, pyqtSignal, QElapsedTimer
 import csv
 from pathlib import Path
 from ModelScripts.mdlp_parser import MDLPParser, is_raw_mdlp_format
 
-
-
 class PlaybackManager(QObject):
     playback_finished = pyqtSignal()
     error_occurred = pyqtSignal(str)
     state_changed = pyqtSignal(str)
-    tick_updated = pyqtSignal()  # emitted once per timer tick after batch add
+    tick_updated = pyqtSignal() 
 
-    # Timer tick interval in ms — controls UI responsiveness vs CPU load
+    # Timer for controlled playback ticks
     _TICK_INTERVAL_MS = 16  # ~60 fps
 
     def __init__(self, data_store, playback_rate_ms: int = 100):
@@ -30,15 +26,15 @@ class PlaybackManager(QObject):
         self._file_path = None
         self._is_raw_format = False
 
-        # Speed multiplier (1.0 = real-time)
+        # Speed multiplier
         self._speed_multiplier = 1.0
 
-        # Wall-clock timer for real-time playback
+        # Timing for playback scheduling
         self._elapsed = QElapsedTimer()
         self._playback_time_offset = 0.0  # data-time at which playback started
         self._wall_start_ms = 0  # elapsed ms when playback started/resumed
 
-        # Timer for tick-driven emission
+        # Timer for tick driven emission
         self._timer = QTimer()
         self._timer.setInterval(self._TICK_INTERVAL_MS)
         self._timer.timeout.connect(self._on_timer_tick)
@@ -79,13 +75,9 @@ class PlaybackManager(QObject):
         except Exception as e:
             self.error_occurred.emit(f"Error loading file: {str(e)}")
             return False
-        
+    
+    # Internal loading methods
     def _load_raw_mdlp(self, file_path: str) -> list:
-        """Load raw mDLP CSV by feeding all bytes through a fresh parser instance.
-        
-        Uses a separate parser instance to avoid signal disconnect/reconnect issues
-        with the main self._parser (which is reserved for future serial use).
-        """
         file_parser = MDLPParser()
         parsed_rows = []
         
@@ -115,8 +107,8 @@ class PlaybackManager(QObject):
         
         return parsed_rows
     
+    # For parsed CSV, just load all into memory 
     def _load_parsed_csv(self, file_path: str) -> list:
-        """Load a pre-parsed CSV file (original behavior)."""
         rows = []
         with open(file_path, 'r', newline='') as csvfile:
             reader = csv.DictReader(csvfile)
@@ -124,9 +116,9 @@ class PlaybackManager(QObject):
                 parsed_row = self._parse_row(row)
                 rows.append(parsed_row)
         return rows
-    
+
+    # Convert values to appropriate types
     def _parse_row(self, row: dict) -> dict:
-        """Convert CSV string values to appropriate numeric types."""
         parsed = {}
         for key, value in row.items():
             try:
@@ -143,7 +135,6 @@ class PlaybackManager(QObject):
 
     # =-= Playback Control =-=
     def bulk_load(self) -> bool:
-        """Load all rows into data_store at once for instant plotting."""
         if not self._loaded_rows:
             self.error_occurred.emit("No file loaded")
             return False
@@ -192,8 +183,8 @@ class PlaybackManager(QObject):
             self._is_playing = False
             self._set_state("paused")
     
+    # Resume from paused state
     def _get_row_time(self, index: int) -> float:
-        """Extract the timestamp from a loaded row for scheduling."""
         row = self._loaded_rows[index]
         return row.get('timestamp', row.get('sample_time', row.get('Elapsed_Time_s', index * 0.001)))
 
@@ -206,7 +197,7 @@ class PlaybackManager(QObject):
             self.playback_finished.emit()
             return
 
-        # How much data-time has elapsed at current speed
+        # Calc time elapsed in wall-clock since playback started/resumed
         wall_elapsed_s = self._elapsed.elapsed() / 1000.0
         data_elapsed = wall_elapsed_s * self._speed_multiplier
         target_time = self._playback_time_offset + data_elapsed
@@ -227,7 +218,6 @@ class PlaybackManager(QObject):
             self.tick_updated.emit()
 
     # =-= State Management =-=
-
     def _set_state(self, new_state: str) -> None:
         self.state_changed.emit(new_state)
 
@@ -253,8 +243,8 @@ class PlaybackManager(QObject):
             'format': 'raw_mdlp' if self._is_raw_format else 'parsed_csv'
         }
 
+    # =-= Playback Speed Control =-=
     def set_speed(self, multiplier: float) -> None:
-        """Set playback speed multiplier. 1.0 = real-time, 2.0 = double speed, etc."""
         if multiplier <= 0:
             return
         # If playing, adjust the time origin so the switch is seamless
@@ -265,7 +255,6 @@ class PlaybackManager(QObject):
         self._speed_multiplier = multiplier
 
     def get_speed(self) -> float:
-        """Get current playback speed multiplier."""
         return self._speed_multiplier
 
     def set_playback_rate(self, rate_ms: int) -> None:
@@ -274,6 +263,4 @@ class PlaybackManager(QObject):
             self._timer.setInterval(self._playback_rate_ms)
 
     def get_playback_rate(self) -> int:
-        """Get current playback rate in milliseconds."""
         return self._playback_rate_ms
-

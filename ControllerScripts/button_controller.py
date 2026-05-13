@@ -1,7 +1,5 @@
-'''
-ButtonController - bridge model and view
-'''
-
+# button_controller.py
+# Controller for handling all button clicks and UI interactions, also connects Model signals to UI update methods.
 from PyQt6.QtWidgets import QFileDialog
 from PyQt6.QtCore import QObject
 from pathlib import Path
@@ -49,7 +47,7 @@ class ButtonController(QObject):
         self.main_window.playback_stop_btn.clicked.connect(self.on_playback_stop_click)
         self.main_window.playback_speed_combo.currentTextChanged.connect(self.on_playback_speed_changed)
         
-        # Recording Panel buttons (for future recording_manager)
+        # Recording Panel buttons
         self.main_window.recording_browse_btn.clicked.connect(self.on_recording_browse_click)
         self.main_window.recording_play_btn.clicked.connect(self.on_recording_play_click)
         self.main_window.recording_stop_btn.clicked.connect(self.on_recording_stop_click)
@@ -62,10 +60,8 @@ class ButtonController(QObject):
                 lambda _idx, c=ch: self._on_axis_changed(c))
 
     # =-= Model Signal Connections =-=
-    def _connect_model_signals(self):
-        """Connect Model signals to UI update methods."""
-        
-        # Data Store signals — use batch signal for all data flow
+    def _connect_model_signals(self):        
+        # Data Store signals, use batch signal for all data flow
         self.data_store.data_batch_added.connect(self.on_data_batch_received)
         self.data_store.data_cleared.connect(self.on_data_cleared)
         
@@ -104,7 +100,6 @@ class ButtonController(QObject):
         self._update_console("Switched to Playback mode")
         self._update_ui_from_state()
     
-    
     def on_visible_click(self):
         self.state_manager.show_console()
         self.main_window.console_text.setVisible(True)
@@ -141,7 +136,6 @@ class ButtonController(QObject):
         self._update_ui_from_state()
 
     # =-= Serial Handlers =-=
-
     def on_serial_refresh_click(self):
         ports = self.serial_manager.scan_ports()
         if not ports:
@@ -199,7 +193,6 @@ class ButtonController(QObject):
             self.main_window.serial_port_combo.addItem(display_text)
 
     # =-= Playback Handlers =-=
-
     def on_playback_browse_click(self):
         file_path, _ = QFileDialog.getOpenFileName(self.main_window,"Select Playback File",str(Path.home()),"CSV Files (*.csv);;All Files (*)")
         
@@ -259,9 +252,9 @@ class ButtonController(QObject):
     def on_playback_stop_click(self):
         self.playback_manager.stop()
         self._update_console("Playback stopped")
-    
+
+    # Playback speed change handler    
     def on_playback_speed_changed(self, text: str):
-        """Handle speed combo box selection."""
         try:
             multiplier = float(text.replace('x', ''))
             self.playback_manager.set_speed(multiplier)
@@ -317,7 +310,6 @@ class ButtonController(QObject):
 
     # =-= Model Signal Handlers =-=
     def on_data_batch_received(self, rows: list):
-        """Handle a batch of rows from data_store (serial or playback)."""
         self._update_plots_batch(rows)
         self._update_stats()
     
@@ -329,7 +321,6 @@ class ButtonController(QObject):
     def on_playback_error(self, error_message: str):
         self._update_console(f"Playback Error: {error_message}")
         self._update_status(f"Error: {error_message}")
-        # Make sure UI reflects stopped state
         self._update_ui_from_state()
     
     def on_playback_state_changed(self, state: str):
@@ -343,7 +334,6 @@ class ButtonController(QObject):
 
     # =-= UI Helper Methods =-=
     def _update_console(self, message):
-        """Update console for debugging messages only."""
         current_text = self.main_window.console_text.toPlainText()
         if current_text:
             new_text = f"{current_text}\n{message}"
@@ -384,7 +374,6 @@ class ButtonController(QObject):
             self.main_window.streaming_btn.setStyleSheet("background-color: #0D47A1; color: white; font-weight: bold;")
             self.main_window.playback_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
         elif self.state_manager.mode == "Playback":
-            # Change to even darker color
             self.main_window.streaming_btn.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold;")
             self.main_window.playback_btn.setStyleSheet("background-color: #0D47A1; color: white; font-weight: bold;")
         
@@ -419,7 +408,6 @@ class ButtonController(QObject):
             self.main_window.serial_baud_combo.setEnabled(True)
     
     # =-= Axis Helpers =-=
-
     def _row_value(self, row: dict, key: str, index: int = None):
         if key == 'time':
             v = row.get('timestamp', row.get('sample_time', None))
@@ -450,8 +438,8 @@ class ButtonController(QObject):
         # Recalculate axis ranges for updated data
         self.main_window.reset_axis_ranges()
 
+    # Update plots with a batch of new rows, used for both streaming and playback data flow
     def _update_plots_batch(self, rows: list):
-        """Update plots with batch of rows from data_store (used by serial streaming)."""
         for row in rows:
             for channel_name in self.main_window.plots:
                 x_key, y_key = self.main_window.get_axis_keys(channel_name)
@@ -461,11 +449,10 @@ class ButtonController(QObject):
                     self.main_window.update_plot(channel_name, x_value, y_value)
     
     def _on_playback_tick(self):
-        """Update stats on each playback tick. Plot updates handled by on_data_batch_received."""
         self._update_stats()
-    
+
+    # Bulk plot all data, used after loading a file or clearing data    
     def _bulk_plot_all(self):
-        """Plot all data in data_store at once using efficient batch rendering."""
         self._clear_plots()
         all_rows = self.data_store.get_all()
         if not all_rows:

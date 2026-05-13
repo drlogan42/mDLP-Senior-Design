@@ -1,7 +1,5 @@
-'''
-RecordingManager - Saves incoming data to CSV
-'''
-
+# recording_manager.py
+# Manages recording of incoming data to CSV files. Listens to DataStore for new data and writes it to disk when recording is active.
 from PyQt6.QtCore import QObject, pyqtSignal
 import csv
 from pathlib import Path
@@ -35,7 +33,6 @@ class RecordingManager(QObject):
         self._set_state("idle")
     
     # =-= Recording Control =-=
-
     def set_output_folder(self, folder_path: str) -> bool:
         try:
             path = Path(folder_path)
@@ -90,6 +87,7 @@ class RecordingManager(QObject):
             self.error_occurred.emit(f"Failed to start recording: {str(e)}")
             return False
 
+    # Stop recording and close file
     def stop_recording(self) -> bool:
         if not self._is_recording:
             return True
@@ -172,5 +170,3 @@ class RecordingManager(QObject):
             'current_file': str(self._current_file) if self._current_file else None,
             'packet_count': self._packet_count
         }
-
-    

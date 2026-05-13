@@ -1,26 +1,24 @@
+# main_window.py
+# This script contains all the UI elements of the main window. It creates layouts, layouts, buttons, labels, and panels and most importantly no logic.
+
+# Imports
 from PyQt6.QtWidgets import QMainWindow, QPushButton, QLabel, QVBoxLayout, QWidget, QGridLayout, QHBoxLayout, QTextEdit, QComboBox, QSizePolicy
 from PyQt6.QtCore import Qt, QTimer
 import pyqtgraph as pg
 import numpy as np
 
-'''
-This Script houses the UI elements of the main window. Creates layouts, buttons, labels, and panels. Does not contain any logic for button clicks or data updates. Purely the view component of the MVC architecture.
-'''
 
+# PlotRingBuffer preallocated buffer for plot data storage. used to avoid repeated memory allocation in high-rate streaming. Uses circular buffer to overwrite data when full
 class PlotRingBuffer:
-    """Pre-allocated numpy ring buffer for efficient plot data storage.
-    
-    Avoids repeated memory allocation during high-rate data streaming.
-    Overwrites oldest data when full (circular buffer behavior).
-    """
     def __init__(self, max_size: int = 10000):  # Larger buffer for more data
         self.max_size = max_size
         self._x = np.zeros(max_size, dtype=np.float64)
         self._y = np.zeros(max_size, dtype=np.float64)
-        self._head = 0      # Next write position
-        self._count = 0     # Number of valid entries
-        self.dirty = False   # True when new data added since last plot refresh
+        self._head = 0      
+        self._count = 0     
+        self.dirty = False   
 
+    # Append single point to buffer
     def append(self, x: float, y: float):
         self._x[self._head] = x
         self._y[self._head] = y
@@ -29,13 +27,12 @@ class PlotRingBuffer:
             self._count += 1
         self.dirty = True
 
+    # Bulk append for more efficient handling of large data
     def append_bulk(self, x_arr, y_arr):
-        """Append arrays of x/y values efficiently."""
         n = len(x_arr)
         if n == 0:
             return
         if n >= self.max_size:
-            # More data than buffer can hold — keep last max_size points
             x_arr = x_arr[-self.max_size:]
             y_arr = y_arr[-self.max_size:]
             n = self.max_size
@@ -59,18 +56,17 @@ class PlotRingBuffer:
             self._count = min(self._count + n, self.max_size)
         self.dirty = True
 
+    # Return data in chronological order as numpy arrays
     def get_ordered(self):
-        """Return (x_array, y_array) in chronological order as numpy views."""
         if self._count == 0:
             return np.empty(0), np.empty(0)
         if self._count < self.max_size:
             return self._x[:self._count], self._y[:self._count]
-        # Buffer is full and wrapped — concatenate to get chronological order
         return (np.concatenate((self._x[self._head:], self._x[:self._head])),
                 np.concatenate((self._y[self._head:], self._y[:self._head])))
 
+    # Resize buffer
     def resize(self, new_max_size: int):
-        """Resize the buffer, preserving existing data up to new capacity."""
         if new_max_size == self.max_size:
             return
         x_old, y_old = self.get_ordered()
@@ -93,6 +89,7 @@ class PlotRingBuffer:
     def __len__(self):
         return self._count
 
+# MainWindow class defines the whole UI structure
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -105,24 +102,18 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central_widget)
         central_widget.setStyleSheet("background-color: #f0f0f0")
 
-
         # =-= Main Layout =-=-
         main_layout = QHBoxLayout(central_widget)
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
 
-
-
         # =-= Left Panel  =-=-
         left_panel = QWidget()
-        left_panel.setMaximumWidth(350)  # Limit width but allow flexibility
+        left_panel.setMaximumWidth(350)  
         left_panel.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         left_layout = QVBoxLayout(left_panel)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(10)
-
-
-
 
         # =-= Control Panel =-=-
             # Title
@@ -171,11 +162,7 @@ class MainWindow(QMainWindow):
             # Add Control Panel to layout
         left_layout.addWidget(control_panel)
 
-
-
-
         # =-= Console Panel =-=-
-
             # Title
         console_title = QLabel("Console")
         console_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #333;")
@@ -193,7 +180,7 @@ class MainWindow(QMainWindow):
         self.console_text.setStyleSheet("background-color: white; padding: 5px;")
         self.console_text.setMinimumHeight(80)
         self.console_text.setMaximumHeight(150)
-        self.console_text.setReadOnly(True)  # Prevent user editing
+        self.console_text.setReadOnly(True) 
         console_panel.setMinimumWidth(250)
         console_panel.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
         console_layout.addWidget(self.console_text)
@@ -201,12 +188,7 @@ class MainWindow(QMainWindow):
             # Add to layout
         left_layout.addWidget(console_panel)
 
-
-
-
-
         # =-= Serial Panel =-=-
-
             # Title
         serial_title = QLabel("Serial Connection")
         serial_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #333;")
@@ -255,18 +237,8 @@ class MainWindow(QMainWindow):
 
             # Add to layout
         left_layout.addWidget(serial_panel)
-        
-
-
-
-
-
-
-
-
-
+    
         # =-= Playback Panel =-=-
-
             #Title
         playback_title = QLabel("Playback Panel")
         playback_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #333;")
@@ -313,11 +285,7 @@ class MainWindow(QMainWindow):
             # add to layout
         left_layout.addWidget(playback_panel)
 
-
-
-
         # =-= Recording Panel  =-=-
-
             # Title
         recording_title = QLabel("Recording Panel")
         recording_title.setStyleSheet("font-size: 14px; font-weight: bold; color: #333;")
@@ -359,9 +327,6 @@ class MainWindow(QMainWindow):
             # add to layout
         left_layout.addWidget(recording_panel)
 
-
-
-
         # =-= Status =-=-
             # Setup
         bottom_panel = QWidget()
@@ -389,7 +354,7 @@ class MainWindow(QMainWindow):
         self.status3.setAlignment(Qt.AlignmentFlag.AlignCenter)
         bottom_layout.addWidget(self.status3)
 
-            # Data stats (separate from status3 so error messages aren't overwritten)
+            # Data stats
         self.stats_label = QLabel("Data Points: 0")
         self.stats_label.setStyleSheet("background-color: #607D8B; color: white; padding: 5px; font-size: 11px;")
         self.stats_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -399,13 +364,8 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(bottom_panel)
         left_layout.addStretch()
 
-
-
-
         # =-= Add Left Panel to main layout =-=
         main_layout.addWidget(left_panel)
-
-
 
         # =-= Plot Panel Container =-=-
             # Setup
@@ -429,20 +389,20 @@ class MainWindow(QMainWindow):
 
         # Create 6 actual plot widgets for data channels
         self.plots = {}
-        self.plot_data = {}      # channel -> PlotRingBuffer
+        self.plot_data = {}      
         self.plot_colors = {}
         self.plot_curves = {}
         self.plot_x_combos = {}
         self.plot_y_combos = {}
 
-        # Plot refresh rate limit (60 FPS for smooth rendering)
+        # Plot refresh rate limit
         self._plot_refresh_timer = QTimer()
         self._plot_refresh_timer.setInterval(16)  # 60 FPS
         self._plot_refresh_timer.timeout.connect(self._refresh_dirty_plots)
         self._plot_refresh_timer.start()
 
-        # Track global min/max values for intelligent axis scaling
-        self._axis_ranges = {}  # axis_key -> {'min': value, 'max': value}
+        # Track global min/max values for better axis scaling
+        self._axis_ranges = {}
 
         # Axis options available in dropdowns
         self.axis_options = [
@@ -457,8 +417,7 @@ class MainWindow(QMainWindow):
         self._axis_display_names = [name for name, _ in self.axis_options]
         self._axis_keys = [key for _, key in self.axis_options]
         
-        # Channel config: (internal_name, display_title, default_y_index, pen_color)
-        #   default_y_index refers to self.axis_options index
+        # Channel config:
         channel_config = [
             ('Channel 1', 'DAC Voltage',         1, '#2196F3'),
             ('Channel 2', 'Integrator Voltage',   2, '#4CAF50'),
@@ -509,7 +468,6 @@ class MainWindow(QMainWindow):
             self.plot_y_combos[channel] = y_combo
 
             # Plot widget
-            # Create initial title in "Y vs X" format
             initial_title = f"{self._axis_display_names[default_y_idx]} vs Time"
             plot_widget = pg.PlotWidget(title=initial_title)
             plot_widget.setBackground('white')
@@ -528,11 +486,9 @@ class MainWindow(QMainWindow):
             
             plot_widget.plotItem.setTitle(initial_title, color='black', size='12pt')
 
-            # Performance: only render data within view range
-            plot_widget.setClipToView(True)
+            plot_widget.setClipToView(True) # For performance
             plot_widget.setDownsampling(mode='peak')
             
-            # Disable auto-range so our intelligent scaling takes control
             plot_widget.enableAutoRange(enable=False)
             plot_widget.setAutoVisible(y=False)
 
@@ -545,7 +501,6 @@ class MainWindow(QMainWindow):
             
             plot_layout.addWidget(cell_widget, grid_row, grid_col)
 
-
         # add to container layout
         plot_container_layout.addWidget(plot_panel)
         main_layout.addWidget(plot_container)
@@ -553,14 +508,14 @@ class MainWindow(QMainWindow):
         # =-= Add Main Layout to central widget =-=
         central_widget.setLayout(main_layout)
     
+    # Update plot with new data point
     def update_plot(self, channel_name, x_value, y_value):
-        """Buffer a new data point. Actual rendering happens on the refresh timer."""
         if channel_name not in self.plot_data:
             return
         self.plot_data[channel_name].append(x_value, y_value)
 
+    # Bulk update plot data from arrays
     def set_plot_data(self, channel_name, x_arr, y_arr):
-        """Replace all data for a channel from pre-built arrays (bulk / axis change)."""
         if channel_name not in self.plot_data:
             return
         buf = self.plot_data[channel_name]
@@ -571,30 +526,28 @@ class MainWindow(QMainWindow):
         buf.append_bulk(np.asarray(x_arr, dtype=np.float64),
                         np.asarray(y_arr, dtype=np.float64))
 
+    # Refresh plots 
     def flush_plots(self):
-        """Force an immediate render of all dirty plots (call after bulk operations)."""
         self._refresh_dirty_plots()
 
+    # Refresh only plots have new data
     def _refresh_dirty_plots(self):
-        """Redraw only plots whose data changed since last refresh."""
         for channel, buf in self.plot_data.items():
             if buf.dirty:
                 x, y = buf.get_ordered()
                 self.plot_curves[channel].setData(x, y)
                 buf.dirty = False
                 
-                # Update axis ranges and apply intelligent scaling
                 self._update_axis_ranges(channel, x, y)
                 self._apply_intelligent_scaling(channel)
 
+    # Update axis ranges based on data
     def _update_axis_ranges(self, channel: str, x_data, y_data):
-        """Update global min/max tracking for axis data."""
         if len(x_data) == 0:
             return
             
         x_key, y_key = self.get_axis_keys(channel)
         
-        # Update X axis range (with special handling for time)
         if x_key != 'time':  # Non-time axes track global min/max
             if x_key not in self._axis_ranges:
                 self._axis_ranges[x_key] = {'min': float('inf'), 'max': float('-inf')}
@@ -607,19 +560,18 @@ class MainWindow(QMainWindow):
         self._axis_ranges[y_key]['min'] = min(self._axis_ranges[y_key]['min'], np.min(y_data))
         self._axis_ranges[y_key]['max'] = max(self._axis_ranges[y_key]['max'], np.max(y_data))
 
+    # Apply intelligent scaling to maintian recent data visibility 
     def _apply_intelligent_scaling(self, channel: str):
-        """Apply intelligent axis scaling based on data ranges."""
         x_key, y_key = self.get_axis_keys(channel)
         plot = self.plots[channel]
         
         # Handle X axis
         if x_key == 'time':
-            # Show a ~2s trailing window (matches live streaming scale)
             x_data, _ = self.plot_data[channel].get_ordered()
             if len(x_data) > 0:
                 x_max = np.max(x_data)
                 x_min_data = np.min(x_data)
-                window = 2.0  # seconds visible at a time
+                window = 2.0  
                 x_start = max(x_min_data, x_max - window)
                 x_padding = window * 0.02
                 plot.setXRange(x_start - x_padding, x_max + x_padding, padding=0)
@@ -628,24 +580,24 @@ class MainWindow(QMainWindow):
             if x_key in self._axis_ranges:
                 x_range = self._axis_ranges[x_key]
                 x_span = x_range['max'] - x_range['min']
-                x_padding = max(x_span * 0.05, abs(x_range['max']) * 0.01)  # 5% or 1% of max value
+                x_padding = max(x_span * 0.05, abs(x_range['max']) * 0.01)
                 plot.setXRange(x_range['min'] - x_padding, x_range['max'] + x_padding, padding=0)
         
-        # Handle Y axis - always use global range with padding 
+        # Handle Y axis
         if y_key in self._axis_ranges:
             y_range = self._axis_ranges[y_key] 
             y_span = y_range['max'] - y_range['min']
-            y_padding = max(y_span * 0.05, abs(y_range['max']) * 0.01)  # 5% or 1% of max value
+            y_padding = max(y_span * 0.05, abs(y_range['max']) * 0.01)
             plot.setYRange(y_range['min'] - y_padding, y_range['max'] + y_padding, padding=0)
     
+    # Get current axis keys for channel based on dropdown selections
     def get_axis_keys(self, channel_name):
-        """Return (x_data_key, y_data_key) for the given channel based on dropdown selections."""
         x_idx = self.plot_x_combos[channel_name].currentIndex()
         y_idx = self.plot_y_combos[channel_name].currentIndex()
         return self._axis_keys[x_idx], self._axis_keys[y_idx]
 
+    # Update status labels
     def update_plot_labels(self, channel_name):
-        """Update axis labels and title to match current dropdown selections."""
         x_name = self.plot_x_combos[channel_name].currentText()
         y_name = self.plot_y_combos[channel_name].currentText()
         self.plots[channel_name].setLabel('bottom', x_name, color='black', size='10pt')
@@ -661,16 +613,16 @@ class MainWindow(QMainWindow):
             self._update_axis_ranges(channel_name, x_data, y_data)
             self._apply_intelligent_scaling(channel_name)
 
+    # Clear all plot data and reset curves
     def clear_plots(self):
-        """Clear all plot data and reset curves."""
         for channel in self.plots:
             self.plot_data[channel].clear()
             self.plot_curves[channel].setData([], [])
         # Reset axis ranges when plots are cleared
         self._axis_ranges.clear()
 
+    # Reset all tracked axis ranges
     def reset_axis_ranges(self):
-        """Reset all tracked axis ranges (useful after loading new data).""" 
         self._axis_ranges.clear()
         # Trigger re-calculation of ranges for current data
         for channel, buf in self.plot_data.items():
@@ -678,7 +630,3 @@ class MainWindow(QMainWindow):
                 x_data, y_data = buf.get_ordered()
                 self._update_axis_ranges(channel, x_data, y_data)
                 self._apply_intelligent_scaling(channel)
-
-
-
-

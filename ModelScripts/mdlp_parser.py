@@ -1,16 +1,12 @@
-'''
-MDLP Parser streams parsed binary protocol for data stream 
-
-Processes raw bytes one at a time using state machine
-'''
-
-
+# mdlp_parser.py
+# Adapted from MATLAB parser into python
+# Parses raw data packets from stream or CSV into structured dicts with physical units.
+# Implements byte protocol state machine to handle streaming data and reconstruct sweeps and samples. Also provides utility to detect raw mDLP format in CSV files.
 from PyQt6.QtCore import QObject, pyqtSignal
 import struct
 
 class MDLPParser(QObject):
     # Signal emitted when complete data packet is parsed
-    
     # Dict contains timestamp, frame_id, packet_id, dac_v, integrator_v, adc_a_current, adc_b_current, etc.
     packet_ready = pyqtSignal(dict)
 
@@ -29,7 +25,6 @@ class MDLPParser(QObject):
     TYPE_FOOT = 4
 
     # Hardware Calibration Constants
-
     DAC_RES = 2 ** 16       # 65536 - DAC resolution (16-bit)
     DAC_FS = 5.077          # DAC full-scale voltage
     DAC_ZS = -0.077         # DAC zero-scale voltage
@@ -40,7 +35,6 @@ class MDLPParser(QObject):
     #ADC offset = 2.048V * (2^20 / 10V) = 214748.3648
     ADC_OFF = 214748
 
-    # End of Matlab start of state machine
     # these have _ in front to show they are internal state variables, not constants
     _STATE_WAIT_SYNC1 = 0   # Waiting for 0xDE
     _STATE_WAIT_SYNC2 = 1   # Got 0xDE, waiting for 0xAD
@@ -50,10 +44,8 @@ class MDLPParser(QObject):
     _STATE_PAYLOAD = 5      # Collecting payload bytes
 
     #start python stuff
-
     def __init__(self):
         super().__init__()
-
         #state machine 
         self._state = self._STATE_WAIT_SYNC1
         self._payload_size = 0
@@ -69,8 +61,8 @@ class MDLPParser(QObject):
         self._current_timestamp = 0.0
         self._sync_timestamp = 0.0 # timestamp of the SYNC that started this packet
 
+    # Reset parser state to look for new packet
     def reset(self):
-        '''Reset parser to initial state. call when starting a new file or reconnecting serial'''
         self._state = self._STATE_WAIT_SYNC1
         self._payload_size = 0
         self._payload_buffer = []
@@ -81,17 +73,8 @@ class MDLPParser(QObject):
         self._current_timestamp = 0.0
         self._sync_timestamp = 0.0
     
+    # Feed byte into parser
     def feed_byte(self, byte_value: int, timestamp: float = 0.0) -> None:
-        ''' 
-        Feed a single byte into parser state machine
-
-        Args:
-            byte_value : Int 0-255, one byte from serial or CSV
-            timestamp: Time in sec
-
-        Call for every byte received. When complete packet is assembled, signals emitted auto
-        '''
-
         self._current_timestamp = timestamp
         
         if self._state == self._STATE_WAIT_SYNC1:
@@ -106,7 +89,7 @@ class MDLPParser(QObject):
                 # Valid SYNC found
                 self._state = self._STATE_SIZE_HI
             elif byte_value == self.SYNC_HIGH:
-                # Got another 0xDE — maybe the real start, stay in SYNC2
+                # Got another 0xDE stay in SYNC2
                 self._sync_timestamp = timestamp
             else:
                 # Not a valid SYNC, go back to waiting
@@ -121,7 +104,7 @@ class MDLPParser(QObject):
             # Payload size low byte
             self._payload_size |= byte_value
             
-            # payload shouldn't be huge
+            # payload shouldn't be above 1024 bytes
             if self._payload_size > 1024:
                 # Bad packet, reset
                 self._state = self._STATE_WAIT_SYNC1
@@ -145,12 +128,12 @@ class MDLPParser(QObject):
             self._payload_bytes_remaining -= 1
             
             if self._payload_bytes_remaining == 0:
-                # Complete packet received — process it
+                # Complete packet received, process it
                 self._process_complete_packet()
                 self._state = self._STATE_WAIT_SYNC1
-    
+
+    # Process a complete packet in the buffer    
     def _process_complete_packet(self) -> None:
-        '''Route complete payload to approp handler'''
         if not self._payload_buffer:
             return
         
@@ -170,7 +153,7 @@ class MDLPParser(QObject):
         PAYLOAD layout (0-indexed in Python):
         [0]  type (2)
         [1]  version
-        [2]  device_id LOW       ← Little-endian
+        [2]  device_id LOW       
         [3]  device_id HIGH
         [4]  frame_id
         [5]  sample_count LOW
@@ -185,7 +168,7 @@ class MDLPParser(QObject):
         p = self._payload_buffer
         
         if len(p) < 13:
-            return #incomplete INIT
+            return
         
         self._sweep_count +=1
         self._packet_index = 0
@@ -213,6 +196,7 @@ class MDLPParser(QObject):
 
         self.sweep_started.emit(self._current_sweep.copy())
 
+    # Hanlde data packets with raw values
     def _handle_data_packet(self) -> None:
         """
         Process PACKET — one data sample.
@@ -221,11 +205,11 @@ class MDLPParser(QObject):
         [0]    type (3)
         [1]    frame_id
         [2]    packet_id
-        [3]    DAC LOW            ← Little-endian uint16
+        [3]    DAC LOW             Little-endian uint16
         [4]    DAC HIGH
-        [5]    integrator LOW     ← Little-endian int16 (SIGNED)
+        [5]    integrator LOW      Little-endian int16 (SIGNED)
         [6]    integrator HIGH
-        [7]    ADC_A MSB          ← Big-endian 3 bytes, 24-bit signed, /16
+        [7]    ADC_A MSB           Big-endian 3 bytes, 24-bit signed, /16
         [8]    ADC_A middle
         [9]    ADC_A LSB
         [10]   ADC_B MSB
@@ -240,14 +224,13 @@ class MDLPParser(QObject):
         self._packet_index += 1
 
         # Extract RAW Values
-
         frame_id = p[1]
         packet_id = p[2]
 
-        # DAC : 2 bytes, little endian unsigned
+        # DAC: 2 bytes, little endian unsigned
         dac_raw = p[3] + (p[4] <<8)
 
-        # Integrator : 2 bytes, little endian signed in16
+        # Integrator: 2 bytes, little endian signed in16
         integrator_raw = struct.unpack('<h', bytes([p[5], p[6]]))[0]
 
         # ADC A: 3 bytes at 7,8,9 big endian order in protocol
@@ -268,13 +251,13 @@ class MDLPParser(QObject):
         adc_a_current = self.ADC_COUNT_TO_CURR * (adc_a_raw + self.ADC_OFF)
         adc_b_current = self.ADC_COUNT_TO_CURR * (adc_b_raw - self.ADC_OFF)
 
-        # Derived values (from MATLAB plotting code)
+        # Derived values
         bias_a = -dac_v + integrator_v
         bias_b = dac_v + integrator_v
         diff_v = 2.0 * dac_v
         diff_i = adc_a_current - adc_b_current
 
-        # Calculate sample time within sweep (matches MATLAB linspace behavior)
+        # Calculate sample time within sweep
         sweep = self._current_sweep
         if sweep['sweep_freq'] > 0 and sweep['sample_count'] > 1:
             sample_time = (sweep['start_time'] + 
@@ -284,7 +267,7 @@ class MDLPParser(QObject):
         else:
             sample_time = self._sync_timestamp
 
-        # Build output dict — these keys are what data_store and plots will use
+        # Build output dict, keys are what data_store and plots will use
         result = {
             'timestamp': self._sync_timestamp,
             'sample_time': sample_time,
@@ -309,8 +292,8 @@ class MDLPParser(QObject):
         
         self.packet_ready.emit(result)
 
+    # Handle FOOT packet
     def _handle_foot(self) -> None:
-        """Process FOOT packet — end-of-sweep message."""
         p = self._payload_buffer
         
         if len(p) < 3:
@@ -323,24 +306,9 @@ class MDLPParser(QObject):
         
         self.sweep_ended.emit(message)
 
+
+    # Convert 3 bytes of ADC data to signed float current value
     def _convert_adc_24bit(self, msb: int, mid: int, lsb: int) -> float:
-        '''
-        Convert 3-byte ADC value to signed float, matching MATLAB exactly.
-        Step by step:
-        1. Bytes come in as [MSB, MID, LSB] (big-endian from device)
-        2. MATLAB reverses to [LSB, MID, MSB] for little-endian typecast
-        3. Sign-extends MSB bit 7 to a 4th byte (0x00 or 0xFF)
-        4. Typecasts 4 bytes to int32
-        5. Divides by 16 (2^4)
-        
-        Args:
-            msb: Most significant byte (contains sign bit)
-            mid: Middle byte
-            lsb: Least significant byte
-            
-        Returns:
-            Signed float value after /16 scaling
-        '''
         # Sign extension: if bit 7 of MSB is set, extend with 0xFF, else 0x00
         sign_byte = 0xFF if (msb & 0x80) else 0x00
         
@@ -352,17 +320,13 @@ class MDLPParser(QObject):
         return value / 16.0
     
     # Utils
-
     def get_sweep_count(self) -> int:
-        """Number of sweeps seen so far."""
         return self._sweep_count
     
     def get_current_sweep(self) -> dict:
-        """Get current sweep info, or empty dict if none."""
         return self._current_sweep.copy() if self._current_sweep else {}
     
     def get_diagnostics(self) -> dict:
-        """Return parser state for debugging and connection info display."""
         return {
             'sweep_count': self._sweep_count,
             'current_state': self._state,
@@ -370,14 +334,6 @@ class MDLPParser(QObject):
         }
     
 def is_raw_mdlp_format(file_path: str) -> bool:
-    """
-    Quick check: does this CSV look like raw mDLP byte data?
-    
-    Checks for:
-    - Has 'Time [s]' or 'Time_s_' column
-    - Has 'Value' column  
-    - First few values are in 0-255 range (byte values)
-    """
     import csv
     
     try:
@@ -405,5 +361,3 @@ def is_raw_mdlp_format(file_path: str) -> bool:
             return True
     except Exception:
         return False
-
-

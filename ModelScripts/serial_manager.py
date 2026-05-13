@@ -1,14 +1,5 @@
-'''
-SerialManager - Handles serial port communication with mDLP device
-
-Model:
-- Discovers available COM ports
-- Opens/closes serial connection
-- Reads bytes in a background thread
-- Feeds bytes into MDLPParser for protocol decoding
-- Parser emits parsed packets → DataStore
-'''
-
+# Serial_Manager.py
+# Manages serial port communication with mDLP by running background thread to read incoming bytes and feed them to parser
 import serial
 import serial.tools.list_ports
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
@@ -16,12 +7,6 @@ from ModelScripts.mdlp_parser import MDLPParser
 import time
 
 class SerialReader(QObject):
-    """
-    Background worker that reads bytes from serial port.
-    
-    Runs on a QThread. Emits byte_received for each byte read.
-    This keeps the main/UI thread responsive while serial data streams in.
-    """
     data_received = pyqtSignal(object, float)  # (bytes_chunk, timestamp)
     error_occurred = pyqtSignal(str)
     connection_lost = pyqtSignal()
@@ -32,11 +17,10 @@ class SerialReader(QObject):
         self._running = False
     
     def set_port(self, serial_port: serial.Serial):
-        """Set the serial port object to read from."""
         self._serial_port = serial_port
 
+    # Background thread method to read from serial port
     def start_reading(self):
-        """Main read loop — called when thread starts."""
         self._running = True
         
         try:
@@ -49,15 +33,15 @@ class SerialReader(QObject):
                     data = self._serial_port.read(waiting)
                     timestamp = time.time()
 
-                    # Emit entire chunk at once — parser iterates on main thread
+                    # Emit entire chunk at once
                     self.data_received.emit(bytes(data), timestamp)
                 else:
-                    # No data available — sleep briefly to avoid busy-waiting
-                    # 1ms is fast enough for 115200 baud (~11.5 KB/s)
+                    # No data available, sleep briefly
+                    # 1ms is fast enough for 115200 baud
                     QThread.msleep(1)
 
         except serial.SerialException as e:
-            if self._running:  # Only report if we didn't intentionally stop
+            if self._running: 
                 self.error_occurred.emit(f"Serial read error: {str(e)}")
                 self.connection_lost.emit()
         except Exception as e:
@@ -65,32 +49,16 @@ class SerialReader(QObject):
                 self.error_occurred.emit(f"Unexpected error: {str(e)}")
 
     def stop_reading(self):
-        """Signal the read loop to exit."""
         self._running = False
 
+# SerialManager class manages the serial connection and data flow
 class SerialManager(QObject):
-    """
-    Manages serial port lifecycle and data flow.
-    
-    Lifecycle:
-        1. scan_ports()        → get list of available COM ports
-        2. connect(port, baud) → open port, start background reader
-        3. bytes flow:  SerialReader → MDLPParser → DataStore
-        4. disconnect()        → stop reader, close port
-    
-    Signals:
-        connected      - port opened successfully
-        disconnected   - port closed (intentional or error)
-        error_occurred - any error during operation
-        ports_updated  - new port scan results available
-    """
-
-    connected = pyqtSignal(str)         # port name
+    connected = pyqtSignal(str)         
     disconnected = pyqtSignal()
     error_occurred = pyqtSignal(str)
-    ports_updated = pyqtSignal(list)    # list of port info dicts
+    ports_updated = pyqtSignal(list)    
 
-    # Default serial settings for mDLP device
+    # Default serial settings for mDLP
     DEFAULT_BAUD = 115200
     DEFAULT_TIMEOUT = 0.1   # Read timeout in seconds
 
@@ -107,7 +75,7 @@ class SerialManager(QObject):
         self._reader = None
         self._reader_thread = None
 
-        # Parser — same class used by PlaybackManager
+        # Parser, same class used by PlaybackManager
         self._parser = MDLPParser()
         self._parser.packet_ready.connect(self._on_packet_ready)
         self._parser.sweep_started.connect(self._on_sweep_started)
@@ -121,14 +89,7 @@ class SerialManager(QObject):
         self._last_byte_time = 0.0  # Track last assigned timestamp for monotonicity
     
     # Port Discovery
-
     def scan_ports(self) -> list:
-        """
-        Scan for available serial ports.
-        
-        Returns list of dicts with port info:
-            [{'port': 'COM3', 'description': 'USB Serial', 'hwid': '...'}]
-        """
         ports = []
         for port_info in serial.tools.list_ports.comports():
             ports.append({
@@ -143,18 +104,7 @@ class SerialManager(QObject):
         return ports
 
     # Connection Control
-
     def connect(self, port_name: str, baud_rate: int = None) -> bool:
-        """
-        Open serial port and start reading.
-        
-        Args:
-            port_name: COM port (e.g., 'COM3', '/dev/ttyUSB0')
-            baud_rate: Baud rate (default: 115200 for mDLP)
-            
-        Returns:
-            True if connection successful
-        """
         if self._is_connected:
             self.disconnect()
 
@@ -206,7 +156,6 @@ class SerialManager(QObject):
             return False
 
     def disconnect(self) -> None:
-        """Stop reading and close serial port."""
         if not self._is_connected:
             return
 
@@ -230,7 +179,6 @@ class SerialManager(QObject):
         self.disconnected.emit()
 
     def _cleanup(self):
-        """Reset internal state after disconnect."""
         self._serial_port = None
         self._reader = None
         self._reader_thread = None
@@ -239,23 +187,17 @@ class SerialManager(QObject):
         self._last_byte_time = 0.0
 
     # =-= Data Flow =-=
-
     def _on_data_received(self, data: bytes, timestamp: float):
-        """Feed received bytes into parser with relative timestamps and synthetic inter-byte timing."""
         if not self._connection_start_time:
             return
             
-        # Convert absolute timestamp to relative seconds since connection
+        # Calculate relative timestamp for parser
         relative_timestamp = timestamp - self._connection_start_time
-        
-        # Calculate inter-byte interval based on baud rate for smoother playback
-        # At baud rate: ~(10 bits per byte including start/stop bits)
+
+        # Calculate inner byte interval based on baud rate (10 bits per byte)
         byte_interval = 10.0 / self._baud_rate  # seconds per byte
-        
-        # Ensure monotonicity: start from the later of the chunk's arrival time
-        # minus the chunk's transmission duration, or just after the last byte's time.
-        # This prevents backwards jumps when large chunks are read at once and the
-        # synthetic spread (N * byte_interval) exceeds the real time between reads.
+                
+        # Monotonic ensured by starting from max of (relative_timestamp - chunk_duration) and (last_byte_time + byte_interval)
         n = len(data)
         chunk_duration = (n - 1) * byte_interval
         start_time = max(relative_timestamp - chunk_duration,
@@ -269,34 +211,27 @@ class SerialManager(QObject):
         self._last_byte_time = start_time + chunk_duration
 
     def _on_packet_ready(self, row: dict):
-        """Parser produced a complete data packet — send to data store."""
         self._data_store.add(row)
 
     def _on_sweep_started(self, sweep_info: dict):
-        """Parser detected start of new sweep."""
         # Future: could emit signal for UI to show sweep info
         pass
 
     def _on_sweep_ended(self, message: str):
-        """Parser detected end of sweep."""
         # Future: could emit signal for UI
         pass
 
 
     # =-= Error Handling =-=
-
     def _on_reader_error(self, error_message: str):
-        """Handle error from background reader."""
         self.error_occurred.emit(error_message)
 
     def _on_connection_lost(self):
-        """Handle unexpected serial disconnection."""
         self._cleanup()
         self.disconnected.emit()
         self.error_occurred.emit("Serial connection lost")
 
     # =-= State Queries =-=
-
     def is_connected(self) -> bool:
         return self._is_connected
 
